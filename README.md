@@ -14,7 +14,7 @@ A complete AI meal planning system that:
 2. **Personalizes for your household** - dietary restrictions, cooking constraints, and per-session special instructions
 3. **Generates shopping lists** automatically from meal plans with LLM-powered refinement
 4. **Imports recipes** from supported websites with full processing (parsing, tagging, indexing)
-5. **Exports to WhatsApp** with prep warnings and organized categories
+5. **Generates shareable summaries** — copy-paste-ready meal plans and shopping lists with prep warnings and organized categories
 6. **Uses vector search** for semantic recipe matching (finds recipes by meaning, not just keywords)
 7. **Tracks your collection** with insights showing cuisine distribution, exploration coverage, and cooking patterns
 
@@ -146,7 +146,7 @@ Aye Chef needs recipes in your Mealie instance to plan meals from. If you alread
 
 **Option B: Bulk import from a site**
 1. Go to **Import → Bulk Import**
-2. Enter a recipe website URL (e.g., `https://www.seriouseats.com`)
+2. Enter a recipe website URL
 3. Select how many recipes to import
 4. The system discovers recipe URLs and imports them in the background
 
@@ -171,6 +171,20 @@ The first run may take a few minutes if you imported many recipes. The embedding
 2. Optionally add special instructions (e.g., "Use up leftover chicken", "No fish this week")
 3. Click **Generate** — the AI plans your week and produces a shopping list
 4. View the result in **Jobs** once it completes
+
+---
+
+## Important: How Aye Chef Works with Mealie
+
+Aye Chef maintains its own search index of your recipes. Understanding this will save you confusion:
+
+**Always import recipes through Aye Chef, not Mealie.** Aye Chef's import pipeline does much more than just adding a recipe — it scrapes the page, parses ingredients into structured data, assigns cuisine/protein/method tags, and indexes the recipe for vector search. Recipes added directly through Mealie's UI skip all of this, so the AI meal planner won't know they exist.
+
+**If you already have recipes in Mealie** (or add some directly later), run **Repair & Optimize** from the Dashboard → Maintenance section. This syncs your Mealie library into Aye Chef's index by tagging, parsing, and indexing any recipes it doesn't know about yet.
+
+**After any bulk changes in Mealie** — manual adds, edits, deletes — run Repair & Optimize again to keep the search index in sync.
+
+**Meal plans draw from your indexed recipes only.** If the AI seems to have a limited pool to pick from, go to **Status** and check the recipe index count. That number is how many recipes the planner can actually see. If it's lower than your Mealie total, run Repair & Optimize.
 
 ---
 
