@@ -1,0 +1,32 @@
+# Aye Chef - Direct Database Mode
+# ================================
+# Enables read-only access to Mealie's SQLite database for faster reads (~500x).
+# Writes still go through the Mealie API.
+#
+# Usage:
+#   1. Find your Mealie data volume:
+#      docker volume ls | grep mealie
+#
+#   2. Create .env with:
+#      MEALIE_VOLUME_NAME=your_mealie_volume_name
+#
+#   3. Enable in config.yaml:
+#      mealie:
+#        use_direct_db: true
+#
+#   4. Start with both compose files:
+#      docker compose -f docker-compose.yml -f docker-compose.dbmode.yml up -d
+
+services:
+  web:
+    volumes:
+      - mealie_data:/mealie-data:ro
+
+  worker:
+    volumes:
+      - mealie_data:/mealie-data:ro
+
+volumes:
+  mealie_data:
+    external: true
+    name: ${MEALIE_VOLUME_NAME:?Set MEALIE_VOLUME_NAME in .env -- run 'docker volume ls | grep mealie' to find your Mealie data volume}

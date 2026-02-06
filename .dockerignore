@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs
+dist
+build
+venv
+.venv
+env
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.cursor
+
+# Data (mounted as volume)
+data/
+*.db
+
+# Secrets (mounted as volume)
+secrets/
+
+# Config (mounted as volume)
+config.yaml
+
+# Tests
+tests/
+pytest.ini
+.pytest_cache
+
+# Docs
+docs/
+obsidian/
+*.md
+!README.md
+
+# Environment files (may contain secrets)
+.env
+.env*
+
+# Misc
+.DS_Store
+*.log

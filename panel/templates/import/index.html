@@ -1,0 +1,1778 @@
+{% extends "base.html" %}
+
+{% block title %}Import Recipes - Aye Chef{% endblock %}
+
+{% block extra_head %}
+<style>
+    @keyframes pulse-subtle {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .animate-pulse-subtle { animation: pulse-subtle 2s ease-in-out infinite; }
+    
+    @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="max-w-xl mx-auto py-8 px-4">
+    
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="font-display text-3xl text-primary">Import Recipes</h1>
+            <p class="text-muted mt-1">Paste a recipe or website URL</p>
+        </div>
+        <a href="/" class="text-accent hover:text-accent-hover font-medium">← Back</a>
+    </header>
+
+    <!-- Active Imports Banner -->
+    {% if active_imports %}
+    <div class="card rounded-xl p-4 mb-6 border-l-4 border-warning">
+        <h2 class="font-semibold text-primary mb-2">Active Imports</h2>
+        {% for job in active_imports %}
+        <a href="/jobs/{{ job.id }}" class="flex items-center justify-between py-2 hover:bg-subtle rounded px-2 -mx-2">
+            <span class="text-primary">{{ job.tool_name }}</span>
+            <span class="text-xs px-2 py-1 bg-warning/20 text-warning rounded-full animate-pulse">
+                {{ job.status }}
+            </span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- URL Input -->
+    <div class="card rounded-xl p-6 mb-6">
+        <form id="url-form" class="space-y-4">
+            <div>
+                <input type="url" name="url" id="url-input" required
+                       placeholder="Paste any recipe or website URL"
+                       class="w-full px-4 py-3 bg-subtle border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none text-lg">
+            </div>
+            <button type="submit" id="submit-btn"
+                    class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition">
+                Continue
+            </button>
+        </form>
+    </div>
+
+    <!-- Result Area (hidden initially) -->
+    <div id="result-card" class="card rounded-xl p-6 mb-6 hidden">
+        <!-- Content populated by JavaScript -->
+    </div>
+
+    <!-- Progress Section (shown when job is running) -->
+    <div id="progress-section" class="card rounded-xl p-6 mb-6 hidden">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display text-xl text-primary">Import Progress</h3>
+            <span id="progress-status" aria-live="polite" class="text-xs px-2 py-1 bg-warning/20 text-warning rounded-full animate-pulse">
+                Running
+            </span>
+        </div>
+        
+        <!-- Phase Progress Bars -->
+        <div class="space-y-4 mb-4">
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-muted">Importing</span>
+                    <span id="progress-importing-text" class="text-muted">0%</span>
+                </div>
+                <div class="h-2 bg-subtle rounded-full overflow-hidden">
+                    <div id="progress-importing" 
+                         role="progressbar" 
+                         aria-valuenow="0" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100"
+                         aria-label="Importing progress"
+                         class="h-full bg-warning rounded-full transition-all duration-300" 
+                         style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-muted">Tagging</span>
+                    <span id="progress-tagging-text" class="text-muted">0%</span>
+                </div>
+                <div class="h-2 bg-subtle rounded-full overflow-hidden">
+                    <div id="progress-tagging" 
+                         role="progressbar" 
+                         aria-valuenow="0" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100"
+                         aria-label="Tagging progress"
+                         class="h-full bg-success rounded-full transition-all duration-300" 
+                         style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-muted">Indexing</span>
+                    <span id="progress-indexing-text" class="text-muted">0%</span>
+                </div>
+                <div class="h-2 bg-subtle rounded-full overflow-hidden">
+                    <div id="progress-indexing" 
+                         role="progressbar" 
+                         aria-valuenow="0" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100"
+                         aria-label="Indexing progress"
+                         class="h-full bg-accent rounded-full transition-all duration-300" 
+                         style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Current Recipe -->
+        <p id="current-recipe" class="text-muted text-sm truncate"></p>
+        
+        <!-- Summary Stats -->
+        <div id="progress-stats" class="flex items-center gap-4 mt-3 text-sm">
+            <span class="text-success"><span id="completed-count">0</span> completed</span>
+            <span class="text-error"><span id="failed-count">0</span> failed</span>
+        </div>
+        
+        <!-- Errors Section (shown when there are failures) -->
+        <div id="errors-section" class="hidden mt-4">
+            <button onclick="toggleErrors()" class="flex items-center text-error hover:text-error/80 transition">
+                <span id="error-toggle-icon" class="text-sm">▶</span>
+                <span class="ml-2 text-sm font-medium"><span id="error-count">0</span> Failed Imports</span>
+            </button>
+            
+            <div id="errors-list" class="hidden mt-2 max-h-60 overflow-y-auto">
+                <ul class="list-none space-y-2" id="errors-ul">
+                    <!-- Error items added dynamically -->
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Completion Message (hidden initially) -->
+        <div id="completion-message" class="hidden mt-4 pt-4 border-t border-border">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Previous Imports -->
+    {% if recent_imports %}
+    <details class="card rounded-xl">
+        <summary class="p-4 font-medium text-primary cursor-pointer">
+            Recent imports
+        </summary>
+        <div class="px-4 pb-4 border-t border-border">
+            {% for job in recent_imports %}
+            <a href="/jobs/{{ job.id }}" class="flex items-center justify-between py-3 hover:bg-subtle rounded px-2 -mx-2">
+                <div>
+                    <span class="font-medium text-primary">{{ job.tool_name }}</span>
+                    <span class="text-muted text-sm ml-2">{{ job.created_at[:10] }}</span>
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full
+                    {% if job.status == 'completed' %}bg-success/20 text-success
+                    {% else %}bg-error/20 text-error{% endif %}">
+                    {{ job.status }}
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const form = document.getElementById('url-form');
+const input = document.getElementById('url-input');
+const submitBtn = document.getElementById('submit-btn');
+const resultCard = document.getElementById('result-card');
+
+let currentDetection = null;
+let selectedCategories = new Set();
+let analysisData = null;
+let testJobId = null;
+let testTimingData = null;
+
+// ====== ANALYSIS CACHE ======
+const ANALYSIS_CACHE_KEY = 'mealie_site_analysis_v2';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+localStorage.removeItem('mealie_site_analysis');
+
+function getCachedAnalysis(host) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ANALYSIS_CACHE_KEY) || '{}');
+        const entry = cache[host];
+        if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+            return entry.data;
+        }
+    } catch (e) {}
+    return null;
+}
+
+function cacheAnalysis(host, data) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ANALYSIS_CACHE_KEY) || '{}');
+        cache[host] = { timestamp: Date.now(), data };
+        localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {}
+}
+
+function clearAnalysisCache(host = null) {
+    try {
+        if (host) {
+            const cache = JSON.parse(localStorage.getItem(ANALYSIS_CACHE_KEY) || '{}');
+            delete cache[host];
+            localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(cache));
+        } else {
+            localStorage.removeItem(ANALYSIS_CACHE_KEY);
+        }
+    } catch (e) {}
+}
+
+// ====== TEST IMPORT STATE PERSISTENCE ======
+const TEST_STATE_KEY = 'mealie_test_import';
+
+function saveTestState(jobId, siteUrl, newCount) {
+    localStorage.setItem(TEST_STATE_KEY, JSON.stringify({
+        jobId, siteUrl, newCount, startedAt: Date.now()
+    }));
+}
+
+function clearTestState() {
+    localStorage.removeItem(TEST_STATE_KEY);
+}
+
+async function checkAndResumeTestImport() {
+    const saved = localStorage.getItem(TEST_STATE_KEY);
+    if (!saved) return;
+    
+    try {
+        const state = JSON.parse(saved);
+        if (Date.now() - state.startedAt > 30 * 60 * 1000) {
+            clearTestState();
+            return;
+        }
+        
+        const response = await fetch(`/jobs/${state.jobId}/status`);
+        const data = await response.json();
+        
+        if (data.status === 'running' || data.status === 'pending') {
+            testJobId = state.jobId;
+            input.value = state.siteUrl;
+            showTestProgress(state.jobId);
+            pollTestJob(state.jobId, state.siteUrl);
+        } else if (data.status === 'completed') {
+            const resultsResponse = await fetch(`/import/test/${state.jobId}/results`);
+            const results = await resultsResponse.json();
+            if (!results.error) {
+                input.value = state.siteUrl;
+                showTestResults(results, state.siteUrl);
+            }
+            clearTestState();
+        } else {
+            clearTestState();
+        }
+    } catch (e) {
+        clearTestState();
+    }
+}
+
+checkAndResumeTestImport();
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = input.value.trim();
+    if (!url) return;
+    
+    submitBtn.textContent = 'Checking...';
+    submitBtn.disabled = true;
+    
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        
+        const response = await fetch('/import/detect', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        currentDetection = data;
+        showResult(data);
+        
+    } catch (err) {
+        showError('Failed to check URL: ' + err.message);
+    } finally {
+        submitBtn.textContent = 'Continue';
+        submitBtn.disabled = false;
+    }
+});
+
+function showResult(data) {
+    resultCard.classList.remove('hidden');
+    selectedCategories.clear();
+    
+    if (data.type === 'recipe') {
+        showRecipeFound(data);
+    } else if (data.type === 'site' || data.type === 'unknown') {
+        if (!data.supported) {
+            showUnknownSite(data);
+        } else if (data.has_categories && data.categories && data.categories.length > 0) {
+            showCollectionSelection(data);
+        } else {
+            showKnownSite(data);
+        }
+    }
+    
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showRecipeFound(data) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Recipe Found</h3>
+            <p class="text-muted text-sm mb-6">${data.host}</p>
+            <button onclick="importRecipe('${data.url}')" id="import-recipe-btn"
+                    class="w-full bg-success hover:bg-success/80 text-white font-semibold py-3 px-6 rounded-lg transition mb-3">
+                Import This Recipe
+            </button>
+            <button onclick="showSiteOptions('${data.url}', '${data.host}', ${data.has_categories}, ${JSON.stringify(data.categories || [])})"
+                    class="w-full text-accent hover:text-accent-hover font-medium py-2 text-sm">
+                Import more from this site →
+            </button>
+        </div>
+    `;
+}
+
+function showUnknownSite(data) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">${data.host}</h3>
+            <p class="text-muted text-sm mb-6">I haven't learned this site yet</p>
+            <button onclick="learnSite('${data.url}', '${data.host}')" id="learn-site-btn"
+                    class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition">
+                Learn This Site
+            </button>
+            <p class="text-muted text-xs mt-3">
+                I'll analyze the site structure to enable recipe imports
+            </p>
+        </div>
+    `;
+}
+
+function showKnownSite(data) {
+    showAnalyzing(data.host);
+    runAnalysis(data.url);
+}
+
+function showCollectionSelection(data) {
+    showAnalyzing(data.host);
+    runAnalysis(data.url);
+}
+
+function showLearningProgress(host) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-muted animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-2">Learning ${host}</h3>
+            <div id="learning-status" class="space-y-2 text-sm text-muted">
+                <p class="animate-pulse-subtle">Analyzing site structure...</p>
+            </div>
+        </div>
+    `;
+}
+
+function updateLearningStatus(message) {
+    const status = document.getElementById('learning-status');
+    if (status) {
+        status.innerHTML = `<p class="animate-pulse-subtle">${message}</p>`;
+    }
+}
+
+function showLearningSucess(data) {
+    const categoryCount = data.categories ? data.categories.length : 0;
+    const categoryText = categoryCount > 0 
+        ? `Found ${categoryCount} recipe collections`
+        : 'Ready to import recipes';
+    
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Site Learned!</h3>
+            <p class="text-muted text-sm mb-6">${categoryText}</p>
+            <button onclick="proceedAfterLearning()" id="proceed-btn"
+                    class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition">
+                Continue to Import
+            </button>
+        </div>
+    `;
+}
+
+function showLearningError(message, jobId = null) {
+    let jobLink = '';
+    if (jobId) {
+        jobLink = `
+            <a href="/jobs/${jobId}" class="block text-accent hover:text-accent-hover font-medium text-sm mb-4">
+                View full log →
+            </a>
+        `;
+    }
+    
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Couldn't Learn Site</h3>
+            <p class="text-muted text-sm mb-4">${message}</p>
+            ${jobLink}
+            <button onclick="resetForm()"
+                    class="text-muted hover:text-primary font-medium text-sm">
+                Try another URL
+            </button>
+        </div>
+    `;
+}
+
+function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return null;
+    if (seconds < 60) return `${Math.ceil(seconds)} seconds`;
+    if (seconds < 3600) {
+        const mins = Math.ceil(seconds / 60);
+        return `${mins}-${Math.ceil(mins * 1.2)} minutes`;
+    }
+    if (seconds < 86400) {
+        const hours = seconds / 3600;
+        return `${hours.toFixed(1)}-${(hours * 1.2).toFixed(1)} hours`;
+    }
+    const days = seconds / 86400;
+    return `${days.toFixed(1)}-${(days * 1.2).toFixed(1)} days`;
+}
+
+function getTimeEstimate(recipeCount) {
+    if (!testTimingData?.avgSecondsPerRecipe || !recipeCount) return null;
+    const estimatedSeconds = testTimingData.avgSecondsPerRecipe * recipeCount;
+    return formatDuration(estimatedSeconds);
+}
+
+function showCategorySelection(url) {
+    const categories = analysisData?.categories || [];
+    const categoryCounts = analysisData?.category_counts || {};
+    selectedCategories.clear();
+    
+    const newRecipes = analysisData?.new_recipes || 0;
+    const fullTimeEstimate = testTimingData?.estimatedFullTime || getTimeEstimate(newRecipes);
+    
+    const sortedCategories = [...categories].sort((a, b) => {
+        return (categoryCounts[b] || 0) - (categoryCounts[a] || 0);
+    });
+    
+    const categoryListHtml = sortedCategories.map(cat => {
+        const count = categoryCounts[cat] || 0;
+        return `
+            <label class="flex items-center justify-between py-2 px-3 hover:bg-subtle rounded cursor-pointer">
+                <div class="flex items-center">
+                    <input type="checkbox" value="${cat}" onchange="toggleCategory('${cat}')"
+                           class="mr-3 h-4 w-4 accent-accent rounded border-border focus:ring-accent">
+                    <span class="text-sm text-primary">${cat}</span>
+                </div>
+                <span class="text-xs text-muted tabular-nums">${count}</span>
+            </label>
+        `;
+    }).join('');
+    
+    resultCard.innerHTML = `
+        <div>
+            <div class="text-center mb-4">
+                <h3 class="font-display text-xl text-primary mb-1">Choose Categories</h3>
+                <p class="text-muted text-sm">Select which recipe collections to import</p>
+            </div>
+            
+            <div class="flex justify-between items-center mb-2 px-1">
+                <span class="text-xs text-muted">${categories.length} categories</span>
+                <div class="space-x-2">
+                    <button onclick="selectAllCategories()" class="text-xs text-accent hover:text-accent-hover">Select all</button>
+                    <span class="text-border">|</span>
+                    <button onclick="deselectAllCategories()" class="text-xs text-accent hover:text-accent-hover">Clear</button>
+                </div>
+            </div>
+            
+            <div id="category-list" class="bg-subtle rounded-lg max-h-64 overflow-y-auto mb-4">
+                ${categoryListHtml}
+            </div>
+            
+            <div id="selection-summary" class="bg-subtle rounded-lg p-3 mb-4 hidden">
+                <div class="flex justify-between text-sm">
+                    <span class="text-primary">Selected recipes:</span>
+                    <span id="selected-recipe-count" class="font-semibold text-primary">0</span>
+                </div>
+                <div class="flex justify-between text-sm mt-1">
+                    <span class="text-muted">Estimated time:</span>
+                    <span id="selected-time-estimate" class="text-muted">-</span>
+                </div>
+            </div>
+            
+            <button id="import-categories-btn" onclick="startCategoryImport('${url}')" disabled
+                    class="w-full bg-accent hover:bg-accent-hover disabled:bg-border disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition mb-2">
+                Select collections to import
+            </button>
+            <button onclick="startFullImport('${url}')"
+                    class="w-full text-muted hover:text-primary font-medium py-2 text-sm">
+                Or import all ${newRecipes} recipes ${fullTimeEstimate ? `(~${fullTimeEstimate})` : ''} →
+            </button>
+        </div>
+    `;
+    
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function toggleCategory(category) {
+    if (selectedCategories.has(category)) {
+        selectedCategories.delete(category);
+    } else {
+        selectedCategories.add(category);
+    }
+    updateSelectionState();
+}
+
+function selectAllCategories() {
+    const checkboxes = document.querySelectorAll('#category-list input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.checked = true;
+        selectedCategories.add(cb.value);
+    });
+    updateSelectionState();
+}
+
+function deselectAllCategories() {
+    const checkboxes = document.querySelectorAll('#category-list input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    selectedCategories.clear();
+    updateSelectionState();
+}
+
+function updateSelectionState() {
+    const count = selectedCategories.size;
+    const categoryCounts = analysisData?.category_counts || {};
+    const btn = document.getElementById('import-categories-btn');
+    const summaryEl = document.getElementById('selection-summary');
+    const recipeCountEl = document.getElementById('selected-recipe-count');
+    const timeEstimateEl = document.getElementById('selected-time-estimate');
+    
+    let totalRecipes = 0;
+    selectedCategories.forEach(cat => {
+        totalRecipes += categoryCounts[cat] || 0;
+    });
+    
+    const maxNewRecipes = analysisData?.new_recipes;
+    if (maxNewRecipes !== undefined && totalRecipes > maxNewRecipes) {
+        totalRecipes = maxNewRecipes;
+    }
+    
+    if (btn) {
+        btn.disabled = count === 0;
+        if (count === 0) {
+            btn.textContent = 'Select collections to import';
+        } else if (totalRecipes > 0) {
+            btn.textContent = `Import ${totalRecipes.toLocaleString()} Recipes`;
+        } else {
+            btn.textContent = `Import ${count} Collection${count > 1 ? 's' : ''}`;
+        }
+    }
+    
+    if (summaryEl && recipeCountEl && timeEstimateEl) {
+        if (count === 0) {
+            summaryEl.classList.add('hidden');
+        } else {
+            summaryEl.classList.remove('hidden');
+            recipeCountEl.textContent = totalRecipes.toLocaleString();
+            const timeEst = getTimeEstimate(totalRecipes);
+            timeEstimateEl.textContent = timeEst || '-';
+        }
+    }
+}
+
+function showError(message) {
+    resultCard.classList.remove('hidden');
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Something went wrong</h3>
+            <p class="text-muted text-sm">${message}</p>
+        </div>
+    `;
+}
+
+async function importRecipe(url) {
+    const btn = document.getElementById('import-recipe-btn');
+    btn.textContent = 'Importing...';
+    btn.disabled = true;
+    
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        
+        const response = await fetch('/import/recipe', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.redirect) {
+            window.location.href = data.redirect;
+        } else {
+            showError(data.error || 'Failed to start import');
+        }
+    } catch (err) {
+        showError('Failed to import: ' + err.message);
+    }
+}
+
+async function learnSite(url, host) {
+    const btn = document.getElementById('learn-site-btn');
+    btn.disabled = true;
+    
+    showLearningProgress(host);
+    
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        
+        const response = await fetch('/import/learn-site', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            pollLearningJob(data.job_id, url);
+        } else {
+            showLearningError(data.error || 'Failed to start analysis');
+        }
+    } catch (err) {
+        showLearningError('Failed to analyze site: ' + err.message);
+    }
+}
+
+async function pollLearningJob(jobId, originalUrl) {
+    const statusMessages = [
+        'Analyzing site structure...',
+        'Finding recipe patterns...',
+        'Discovering collections...',
+        'Almost done...'
+    ];
+    let messageIndex = 0;
+    
+    const updateMessage = () => {
+        if (messageIndex < statusMessages.length) {
+            updateLearningStatus(statusMessages[messageIndex]);
+            messageIndex++;
+        }
+    };
+    
+    const messageInterval = setInterval(updateMessage, 2500);
+    
+    const poll = async () => {
+        try {
+            const response = await fetch(`/jobs/${jobId}/status`);
+            const data = await response.json();
+            
+            if (data.status === 'completed') {
+                clearInterval(messageInterval);
+                const formData = new FormData();
+                formData.append('url', originalUrl);
+                const detectResponse = await fetch('/import/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+                const detectData = await detectResponse.json();
+                
+                if (detectData.supported) {
+                    showLearningSucess(detectData);
+                    currentDetection = detectData;
+                } else {
+                    showLearningError('Site analysis completed but patterns could not be determined.', jobId);
+                }
+            } else if (data.status === 'failed') {
+                clearInterval(messageInterval);
+                showLearningError(data.error || 'Analysis failed', jobId);
+            } else {
+                setTimeout(poll, 2000);
+            }
+        } catch (err) {
+            clearInterval(messageInterval);
+            showLearningError('Lost connection while analyzing', jobId);
+        }
+    };
+    
+    setTimeout(poll, 2000);
+}
+
+function proceedAfterLearning() {
+    if (currentDetection) {
+        if (currentDetection.has_categories && currentDetection.categories?.length > 0) {
+            showCollectionSelection(currentDetection);
+        } else {
+            showKnownSite(currentDetection);
+        }
+    }
+}
+
+function showSiteOptions(url, host, hasCategories, categories) {
+    const urlObj = new URL(url);
+    const baseUrl = urlObj.origin;
+    
+    const data = {
+        url: baseUrl,
+        host: host,
+        supported: true,
+        has_categories: hasCategories,
+        categories: categories
+    };
+    
+    currentDetection = data;
+    
+    if (hasCategories && categories && categories.length > 0) {
+        showCollectionSelection(data);
+    } else {
+        showKnownSite(data);
+    }
+}
+
+function startCategoryImport(url) {
+    const categories = Array.from(selectedCategories);
+    startImport(url, categories);
+}
+
+async function startImport(url, categories) {
+    const formData = new FormData();
+    formData.append('url', url);
+    formData.append('sitemap', 'on');
+    formData.append('async', 'true');
+    
+    if (categories && categories.length > 0) {
+        categories.forEach(cat => {
+            formData.append('categories[]', cat);
+        });
+    }
+    
+    try {
+        const response = await fetch('/import/start', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.job_id) {
+            startProgressMonitoring(data.job_id);
+        } else if (data.redirect) {
+            window.location.href = data.redirect;
+        } else {
+            showError(data.error || 'Failed to start import');
+        }
+    } catch (err) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/import/start';
+        
+        const urlInput = document.createElement('input');
+        urlInput.type = 'hidden';
+        urlInput.name = 'url';
+        urlInput.value = url;
+        form.appendChild(urlInput);
+        
+        const sitemapInput = document.createElement('input');
+        sitemapInput.type = 'hidden';
+        sitemapInput.name = 'sitemap';
+        sitemapInput.value = 'on';
+        form.appendChild(sitemapInput);
+        
+        if (categories && categories.length > 0) {
+            categories.forEach(cat => {
+                const catInput = document.createElement('input');
+                catInput.type = 'hidden';
+                catInput.name = 'categories[]';
+                catInput.value = cat;
+                form.appendChild(catInput);
+            });
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function resetForm() {
+    input.value = '';
+    resultCard.classList.add('hidden');
+    selectedCategories.clear();
+    currentDetection = null;
+    analysisData = null;
+    testJobId = null;
+    testTimingData = null;
+    resetErrors();
+    input.focus();
+}
+
+// ====== WIZARD FLOW FUNCTIONS ======
+
+function showAnalyzing(host, isCached = false) {
+    const message = isCached 
+        ? 'Refreshing counts from Mealie...'
+        : 'Fetching category counts, checking for duplicates...';
+    
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-warning/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-warning animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-2">Analyzing ${host}</h3>
+            <p class="text-muted text-sm animate-pulse-subtle">${message}</p>
+        </div>
+    `;
+}
+
+async function runAnalysis(url, forceRefresh = false) {
+    const parsed = new URL(url.startsWith('http') ? url : 'https://' + url);
+    const host = parsed.hostname.replace('www.', '');
+    
+    const cached = !forceRefresh ? getCachedAnalysis(host) : null;
+    
+    if (cached) {
+        showAnalyzing(host, true);
+        
+        try {
+            const formData = new FormData();
+            formData.append('host', host);
+            
+            const response = await fetch('/import/refresh-counts', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const fresh = await response.json();
+            
+            const data = {
+                ...cached,
+                url: url,
+                already_imported: fresh.already_imported,
+                new_recipes: cached.total_recipes - fresh.already_imported
+            };
+            
+            analysisData = data;
+            
+            if (data.new_recipes === 0) {
+                showAllCaughtUp(data);
+            } else {
+                showAnalysisResults(data);
+            }
+            
+        } catch (err) {
+            runAnalysis(url, true);
+        }
+        return;
+    }
+    
+    showAnalyzing(host, false);
+    
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        
+        const response = await fetch('/import/analyze', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        data.url = url;
+        analysisData = data;
+        
+        if (!data.supported) {
+            showError('Site not supported');
+            return;
+        }
+        
+        if (data.compatible !== false) {
+            cacheAnalysis(host, {
+                supported: data.supported,
+                host: data.host,
+                total_recipes: data.total_recipes,
+                sample_urls: data.sample_urls,
+                sample_names: data.sample_names,
+                has_categories: data.has_categories,
+                categories: data.categories,
+                category_counts: data.category_counts,
+                compatible: data.compatible,
+                compatibility_error: data.compatibility_error,
+                test_recipe_name: data.test_recipe_name
+            });
+        }
+        
+        if (data.compatible === false) {
+            showIncompatibleSite(data);
+            return;
+        }
+        
+        if (data.new_recipes === 0) {
+            showAllCaughtUp(data);
+        } else {
+            showAnalysisResults(data);
+        }
+        
+    } catch (err) {
+        showError('Analysis failed: ' + err.message);
+    }
+}
+
+function showIncompatibleSite(data) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-2">Can't Import from ${data.host}</h3>
+            <p class="text-muted text-sm mb-4">${data.compatibility_error || 'This site is not compatible with Mealie.'}</p>
+            
+            <div class="bg-subtle rounded-lg p-4 text-left text-sm mb-4">
+                <p class="text-muted mb-2">We found ${data.total_recipes} recipes on this site, but Mealie's scraper can't extract the recipe data.</p>
+                <p class="text-muted">This usually happens when a site:</p>
+                <ul class="text-muted list-disc list-inside mt-1">
+                    <li>Uses non-standard recipe format</li>
+                    <li>Requires JavaScript to render content</li>
+                    <li>Has anti-bot protection</li>
+                </ul>
+            </div>
+            
+            <button onclick="resetForm()"
+                    class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition">
+                Try Another Site
+            </button>
+        </div>
+    `;
+}
+
+function showAllCaughtUp(data) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">All Caught Up!</h3>
+            <p class="text-muted text-sm mb-4">
+                You've already imported all ${data.total_recipes} recipes from ${data.host}
+            </p>
+            <div class="bg-subtle rounded-lg p-4 text-sm text-muted">
+                <div class="flex justify-between mb-1">
+                    <span>Total on site</span>
+                    <span class="font-medium">${data.total_recipes}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>In your collection</span>
+                    <span class="font-medium text-success">${data.already_imported}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showAnalysisResults(data) {
+    const categoryCount = data.categories?.length || 0;
+    const categoryCounts = data.category_counts || {};
+    
+    let categoriesHtml = '';
+    if (categoryCount > 0) {
+        const sortedCategories = [...data.categories].sort((a, b) => 
+            (categoryCounts[b] || 0) - (categoryCounts[a] || 0)
+        );
+        const categoryItems = sortedCategories.map(cat => {
+            const count = categoryCounts[cat] || 0;
+            return `
+                <div class="flex items-center justify-between py-1">
+                    <span class="text-sm text-muted">${cat}</span>
+                    <span class="text-xs text-muted tabular-nums">${count.toLocaleString()}</span>
+                </div>
+            `;
+        }).join('');
+        
+        categoriesHtml = `
+            <details class="mb-4" open>
+                <summary class="text-sm font-medium text-primary cursor-pointer hover:text-primary/80 mb-2">
+                    ${categoryCount} categories
+                </summary>
+                <div class="pl-2 border-l-2 border-border max-h-40 overflow-y-auto">
+                    ${categoryItems}
+                </div>
+            </details>
+        `;
+    }
+    
+    const samplesHtml = data.sample_names.length > 0 ? data.sample_names.map(name => `
+        <div class="text-sm text-muted truncate">• ${name}</div>
+    `).join('') : '';
+    
+    resultCard.innerHTML = `
+        <div>
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="font-display text-xl text-primary">${data.host}</h3>
+                    <p class="text-muted text-sm">${data.total_recipes.toLocaleString()} recipes found</p>
+                </div>
+                <span class="px-2 py-1 bg-success/20 text-success text-xs font-medium rounded-full whitespace-nowrap">
+                    ✓ Compatible
+                </span>
+            </div>
+            
+            ${categoriesHtml}
+            
+            <div class="bg-subtle rounded-lg p-4 mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-muted">Already in Mealie</span>
+                    <span class="font-medium text-success">${data.already_imported.toLocaleString()}</span>
+                </div>
+                <div class="flex items-center justify-between pt-2 border-t border-border">
+                    <span class="text-sm font-medium text-primary">Available to import</span>
+                    <span class="font-bold text-accent text-lg">${data.new_recipes.toLocaleString()}</span>
+                </div>
+            </div>
+            
+            ${samplesHtml ? `
+            <details class="mb-4">
+                <summary class="text-xs text-muted cursor-pointer hover:text-primary">
+                    Preview sample recipes
+                </summary>
+                <div class="mt-2 space-y-1 pl-2 border-l-2 border-border">
+                    ${samplesHtml}
+                </div>
+            </details>
+            ` : ''}
+            
+            <div class="border-t border-border pt-4">
+                <button onclick="startTestImport('${data.url}', ${data.new_recipes})" id="test-import-btn"
+                        class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition">
+                    Test Import (10 recipes)
+                </button>
+                <p class="text-muted text-xs mt-2 text-center">
+                    Imports 10 recipes to measure actual speed
+                </p>
+            </div>
+            
+            <div class="mt-4 text-center">
+                <button onclick="runAnalysis('${data.url}', true)" 
+                        class="text-xs text-muted hover:text-primary underline">
+                    Re-analyze site (cached ${formatCacheAge(data.host)})
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function formatCacheAge(host) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ANALYSIS_CACHE_KEY) || '{}');
+        const entry = cache[host];
+        if (!entry) return '';
+        
+        const ageMs = Date.now() - entry.timestamp;
+        const mins = Math.floor(ageMs / 60000);
+        if (mins < 60) return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        return `${Math.floor(hours / 24)}d ago`;
+    } catch {
+        return '';
+    }
+}
+
+async function startTestImport(url, newCount) {
+    const btn = document.getElementById('test-import-btn');
+    btn.textContent = 'Starting...';
+    btn.disabled = true;
+    
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        if (newCount) {
+            formData.append('new_count', newCount.toString());
+        }
+        
+        const response = await fetch('/import/test', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            testJobId = data.job_id;
+            saveTestState(data.job_id, url, newCount);
+            showTestProgress(data.job_id);
+            pollTestJob(data.job_id, url);
+        } else {
+            showError(data.error || 'Failed to start test');
+        }
+    } catch (err) {
+        showError('Failed to start test: ' + err.message);
+    }
+}
+
+function showTestProgress(jobId) {
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-warning/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-warning animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-2">Testing Import</h3>
+            <p id="test-status" class="text-muted text-sm animate-pulse-subtle">
+                Importing 10 test recipes in parallel...
+            </p>
+            <p class="text-muted text-xs mt-4">
+                Each recipe goes through: import → parse → tag → index
+            </p>
+            <a href="/jobs/${jobId}" target="_blank" class="inline-block mt-4 text-accent hover:text-accent-hover text-sm font-medium">
+                View console log →
+            </a>
+        </div>
+    `;
+}
+
+async function pollTestJob(jobId, originalUrl) {
+    const poll = async () => {
+        try {
+            const statusResponse = await fetch(`/jobs/${jobId}/status`);
+            const statusData = await statusResponse.json();
+            
+            if (statusData.status === 'completed' || statusData.status === 'failed') {
+                const resultsResponse = await fetch(`/import/test/${jobId}/results`);
+                const results = await resultsResponse.json();
+                
+                if (results.error) {
+                    showTestError('Could not get results', jobId);
+                } else {
+                    showTestResults(results, originalUrl);
+                }
+            } else if (statusData.status === 'cancelled') {
+                showTestError('Test was cancelled', jobId);
+            } else {
+                setTimeout(poll, 3000);
+            }
+        } catch (err) {
+            showTestError('Lost connection', jobId);
+        }
+    };
+    
+    setTimeout(poll, 3000);
+}
+
+function showTestResults(results, url) {
+    clearTestState();
+    
+    testTimingData = {
+        avgSecondsPerRecipe: results.avg_seconds_per_recipe,
+        estimatedFullTime: results.estimated_full_import_time
+    };
+    
+    const successRate = results.succeeded / results.total;
+    const isFullSuccess = results.succeeded === results.total;
+    const isPartialSuccess = successRate >= 0.8 && !isFullSuccess;
+    const isFailed = successRate < 0.8;
+    
+    const recipesHtml = results.recipes.map(r => {
+        if (r.status === 'success') {
+            return `
+                <div class="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <span class="text-sm text-primary truncate flex-1 mr-2">${r.name}</span>
+                    <a href="${r.mealie_url}" target="_blank" 
+                       class="text-xs text-accent hover:text-accent-hover whitespace-nowrap">
+                        View →
+                    </a>
+                </div>
+            `;
+        } else {
+            const urlPath = r.url.replace(/\/$/, '').split('/').pop() || 'Unknown';
+            const displayName = urlPath.replace(/-/g, ' ');
+            return `
+                <div class="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <span class="text-sm text-muted truncate flex-1 mr-2">
+                        ${displayName}
+                    </span>
+                    <span class="text-xs text-error">Failed</span>
+                </div>
+            `;
+        }
+    }).join('');
+    
+    let statusHtml, actionsHtml;
+    const hasCategories = analysisData?.has_categories && analysisData?.categories?.length > 0;
+    
+    if (isFullSuccess) {
+        statusHtml = `
+            <div class="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Test Passed!</h3>
+            <p class="text-muted text-sm mb-4">All ${results.total} recipes imported successfully</p>
+        `;
+        if (hasCategories) {
+            actionsHtml = `
+                <button onclick="showCategorySelection('${url}')"
+                        class="w-full bg-success hover:bg-success/80 text-white font-semibold py-3 px-6 rounded-lg transition mb-2">
+                    Choose Categories to Import
+                </button>
+                <p class="text-muted text-xs text-center mb-2">
+                    ${results.estimated_full_import_time ? `Estimated full import: ${results.estimated_full_import_time}` : ''}
+                </p>
+                <button onclick="startFullImport('${url}')"
+                        class="w-full text-accent hover:text-accent-hover font-medium py-2 text-sm">
+                    Or import all ${analysisData?.new_recipes || ''} recipes →
+                </button>
+            `;
+        } else {
+            actionsHtml = `
+                <button onclick="startFullImport('${url}')"
+                        class="w-full bg-success hover:bg-success/80 text-white font-semibold py-3 px-6 rounded-lg transition mb-2">
+                    Import All ${analysisData?.new_recipes || ''} New Recipes
+                </button>
+                <p class="text-muted text-xs text-center">
+                    ${results.estimated_full_import_time ? `Estimated: ${results.estimated_full_import_time}` : `${analysisData?.new_recipes || 'many'} recipes to import`}
+                </p>
+            `;
+        }
+    } else if (isPartialSuccess) {
+        statusHtml = `
+            <div class="w-12 h-12 bg-warning/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Mostly Working</h3>
+            <p class="text-muted text-sm mb-4">
+                ${results.succeeded}/${results.total} recipes succeeded (${results.failed} failed)
+            </p>
+        `;
+        if (hasCategories) {
+            actionsHtml = `
+                <button onclick="showCategorySelection('${url}')"
+                        class="w-full bg-warning hover:bg-warning/80 text-white font-semibold py-3 px-6 rounded-lg transition mb-2">
+                    Choose Categories to Import
+                </button>
+                <p class="text-muted text-xs text-center mb-3">
+                    ${results.estimated_full_import_time ? `Estimated: ${results.estimated_full_import_time} • ` : ''}Some recipes may fail
+                </p>
+                <a href="/jobs/${testJobId}" class="text-accent hover:text-accent-hover text-sm font-medium">
+                    View detailed log →
+                </a>
+            `;
+        } else {
+            actionsHtml = `
+                <button onclick="startFullImport('${url}')"
+                        class="w-full bg-warning hover:bg-warning/80 text-white font-semibold py-3 px-6 rounded-lg transition mb-2">
+                    Continue with Full Import
+                </button>
+                <p class="text-muted text-xs text-center mb-3">
+                    ${results.estimated_full_import_time ? `Estimated: ${results.estimated_full_import_time} • ` : ''}Some recipes may fail
+                </p>
+                <a href="/jobs/${testJobId}" class="text-accent hover:text-accent-hover text-sm font-medium">
+                    View detailed log →
+                </a>
+            `;
+        }
+    } else {
+        statusHtml = `
+            <div class="w-12 h-12 bg-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Test Failed</h3>
+            <p class="text-muted text-sm mb-4">
+                Only ${results.succeeded}/${results.total} recipes succeeded
+            </p>
+        `;
+        actionsHtml = `
+            <a href="/jobs/${testJobId}" 
+               class="block w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-6 rounded-lg transition text-center mb-3">
+                View Error Log
+            </a>
+            <button onclick="resetForm()"
+                    class="text-muted hover:text-primary font-medium text-sm w-full">
+                Try another site
+            </button>
+        `;
+    }
+    
+    resultCard.innerHTML = `
+        <div>
+            <div class="text-center mb-4">
+                ${statusHtml}
+            </div>
+            
+            <div class="bg-subtle rounded-lg p-3 mb-4 max-h-48 overflow-y-auto">
+                ${recipesHtml}
+            </div>
+            
+            <div class="border-t border-border pt-4">
+                ${actionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function showTestError(message, jobId) {
+    clearTestState();
+    resultCard.innerHTML = `
+        <div class="text-center">
+            <div class="w-12 h-12 bg-error/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="font-display text-xl text-primary mb-1">Test Failed</h3>
+            <p class="text-muted text-sm mb-4">${message}</p>
+            ${jobId ? `
+            <a href="/jobs/${jobId}" class="text-accent hover:text-accent-hover font-medium text-sm">
+                View full log →
+            </a>
+            ` : ''}
+        </div>
+    `;
+}
+
+function startFullImport(url) {
+    startImport(url, []);
+}
+
+// ====== ERROR TRACKING ======
+
+let failedRecipes = [];
+
+function trackFailedRecipe(url, error) {
+    if (!failedRecipes.some(r => r.url === url)) {
+        failedRecipes.push({ url, error });
+        updateErrorDisplay();
+    }
+}
+
+function updateErrorDisplay() {
+    const count = failedRecipes.length;
+    document.getElementById('error-count').textContent = count;
+    
+    if (count > 0) {
+        document.getElementById('errors-section').classList.remove('hidden');
+        
+        const ul = document.getElementById('errors-ul');
+        ul.innerHTML = failedRecipes.map(item => {
+            const safeUrl = escapeHtml(item.url);
+            const safeError = escapeHtml(item.error);
+            return `
+                <li class="p-2 bg-error/10 rounded border border-error/20">
+                    <div class="text-sm font-medium text-error truncate" title="${safeUrl}">
+                        ${safeUrl}
+                    </div>
+                    <div class="text-xs text-error/80 mt-1">
+                        ${safeError}
+                    </div>
+                </li>
+            `;
+        }).join('');
+    }
+}
+
+function toggleErrors() {
+    const list = document.getElementById('errors-list');
+    const icon = document.getElementById('error-toggle-icon');
+    
+    if (list.classList.contains('hidden')) {
+        list.classList.remove('hidden');
+        icon.textContent = '▼';
+    } else {
+        list.classList.add('hidden');
+        icon.textContent = '▶';
+    }
+}
+
+function resetErrors() {
+    failedRecipes = [];
+    document.getElementById('errors-section').classList.add('hidden');
+    document.getElementById('errors-list').classList.add('hidden');
+    document.getElementById('error-toggle-icon').textContent = '▶';
+    document.getElementById('errors-ul').innerHTML = '';
+    document.getElementById('error-count').textContent = '0';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ====== SSE PROGRESS MONITORING ======
+
+let eventSource = null;
+let currentJobId = null;
+
+function startProgressMonitoring(jobId) {
+    if (typeof EventSource === 'undefined') {
+        pollJobProgress(jobId);
+        return;
+    }
+    
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    
+    currentJobId = jobId;
+    
+    document.getElementById('progress-section').classList.remove('hidden');
+    document.getElementById('result-card').classList.add('hidden');
+    
+    resetProgressBars();
+    
+    eventSource = new EventSource(`/api/jobs/${jobId}/progress`);
+    
+    eventSource.addEventListener('progress', function(e) {
+        const data = JSON.parse(e.data);
+        updateProgressBar(data.phase, data.percent);
+        
+        if (data.current_recipe) {
+            document.getElementById('current-recipe').textContent = 
+                `Processing: ${data.current_recipe}`;
+        }
+        
+        if (data.completed !== undefined) {
+            document.getElementById('completed-count').textContent = data.completed;
+        }
+        if (data.failed !== undefined) {
+            document.getElementById('failed-count').textContent = data.failed;
+        }
+        
+        if (data.failed_recipes && Array.isArray(data.failed_recipes)) {
+            data.failed_recipes.forEach(item => {
+                trackFailedRecipe(item.url, item.error);
+            });
+        }
+        if (data.failure) {
+            trackFailedRecipe(data.failure.url, data.failure.error);
+        }
+    });
+    
+    eventSource.addEventListener('complete', function(e) {
+        const data = JSON.parse(e.data);
+        eventSource.close();
+        eventSource = null;
+        
+        if (data.failed_recipes && Array.isArray(data.failed_recipes)) {
+            data.failed_recipes.forEach(item => {
+                trackFailedRecipe(item.url, item.error);
+            });
+        }
+        
+        showCompletionMessage(data);
+    });
+    
+    eventSource.addEventListener('error', function(e) {
+        if (e.data) {
+            try {
+                const data = JSON.parse(e.data);
+                showProgressError(data.message || 'An error occurred');
+            } catch {
+                showProgressError('Connection lost');
+            }
+        } else {
+            checkJobStatus(jobId);
+        }
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    });
+    
+    document.getElementById('progress-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function resetProgressBars() {
+    ['importing', 'tagging', 'indexing'].forEach(phase => {
+        const bar = document.getElementById(`progress-${phase}`);
+        const text = document.getElementById(`progress-${phase}-text`);
+        if (bar) {
+            bar.style.width = '0%';
+            bar.setAttribute('aria-valuenow', '0');
+        }
+        if (text) text.textContent = '0%';
+    });
+    document.getElementById('completed-count').textContent = '0';
+    document.getElementById('failed-count').textContent = '0';
+    document.getElementById('current-recipe').textContent = '';
+    document.getElementById('progress-status').className = 
+        'text-xs px-2 py-1 bg-warning/20 text-warning rounded-full animate-pulse';
+    document.getElementById('progress-status').textContent = 'Running';
+    document.getElementById('completion-message').classList.add('hidden');
+    
+    resetErrors();
+}
+
+function updateProgressBar(phase, percent) {
+    const bar = document.getElementById(`progress-${phase}`);
+    const text = document.getElementById(`progress-${phase}-text`);
+    
+    if (bar) {
+        bar.style.width = `${percent}%`;
+        bar.setAttribute('aria-valuenow', percent);
+    }
+    if (text) {
+        text.textContent = `${percent}%`;
+    }
+}
+
+function pollJobProgress(jobId) {
+    currentJobId = jobId;
+    
+    document.getElementById('progress-section').classList.remove('hidden');
+    document.getElementById('result-card').classList.add('hidden');
+    
+    resetProgressBars();
+    
+    const pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/jobs/${jobId}`);
+            const data = await response.json();
+            
+            if (data.progress) {
+                if (data.progress.importing !== undefined) {
+                    updateProgressBar('importing', data.progress.importing);
+                }
+                if (data.progress.tagging !== undefined) {
+                    updateProgressBar('tagging', data.progress.tagging);
+                }
+                if (data.progress.indexing !== undefined) {
+                    updateProgressBar('indexing', data.progress.indexing);
+                }
+                if (data.progress.current_recipe) {
+                    document.getElementById('current-recipe').textContent = 
+                        `Processing: ${data.progress.current_recipe}`;
+                }
+                if (data.progress.completed !== undefined) {
+                    document.getElementById('completed-count').textContent = data.progress.completed;
+                }
+                if (data.progress.failed !== undefined) {
+                    document.getElementById('failed-count').textContent = data.progress.failed;
+                }
+                
+                if (data.progress.failed_recipes && Array.isArray(data.progress.failed_recipes)) {
+                    data.progress.failed_recipes.forEach(item => {
+                        trackFailedRecipe(item.url, item.error);
+                    });
+                }
+            }
+            
+            if (data.status === 'completed') {
+                clearInterval(pollInterval);
+                if (data.result?.failed_recipes && Array.isArray(data.result.failed_recipes)) {
+                    data.result.failed_recipes.forEach(item => {
+                        trackFailedRecipe(item.url, item.error);
+                    });
+                }
+                showCompletionMessage({
+                    total_imported: data.result?.total_imported || 0,
+                    failed: data.result?.failed || 0
+                });
+            } else if (data.status === 'failed') {
+                clearInterval(pollInterval);
+                showProgressError(data.error || 'Job failed');
+            }
+        } catch (e) {
+            console.error('Polling error:', e);
+        }
+    }, 2000);
+}
+
+function showCompletionMessage(data) {
+    const statusBadge = document.getElementById('progress-status');
+    statusBadge.classList.remove('animate-pulse', 'bg-warning/20', 'text-warning');
+    statusBadge.classList.add('bg-success/20', 'text-success');
+    statusBadge.textContent = 'Complete';
+    
+    document.getElementById('current-recipe').textContent = '';
+    
+    if (data.total_imported !== undefined) {
+        document.getElementById('completed-count').textContent = data.total_imported;
+    }
+    if (data.failed !== undefined) {
+        document.getElementById('failed-count').textContent = data.failed;
+    }
+    
+    const completionDiv = document.getElementById('completion-message');
+    completionDiv.classList.remove('hidden');
+    
+    const failedCount = data.failed || 0;
+    const totalImported = data.total_imported || 0;
+    
+    if (failedCount === 0) {
+        completionDiv.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-success/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-primary">Import Complete!</p>
+                    <p class="text-sm text-muted">${totalImported} recipes imported successfully</p>
+                </div>
+            </div>
+            <div class="mt-4 flex gap-3">
+                <a href="/" class="flex-1 text-center bg-success hover:bg-success/80 text-white font-medium py-2 px-4 rounded-lg transition">
+                    View Recipes
+                </a>
+                <button onclick="resetAndStartNew()" class="flex-1 text-center text-accent hover:text-accent-hover font-medium py-2 px-4 rounded-lg border border-border hover:border-accent transition">
+                    Import More
+                </button>
+            </div>
+        `;
+    } else {
+        completionDiv.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-warning/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-medium text-primary">Import Complete with Issues</p>
+                    <p class="text-sm text-muted">${totalImported} imported, ${failedCount} failed</p>
+                </div>
+            </div>
+            <div class="mt-4 flex gap-3">
+                <a href="/jobs/${currentJobId}" class="flex-1 text-center bg-accent hover:bg-accent-hover text-white font-medium py-2 px-4 rounded-lg transition">
+                    View Details
+                </a>
+                <button onclick="resetAndStartNew()" class="flex-1 text-center text-accent hover:text-accent-hover font-medium py-2 px-4 rounded-lg border border-border hover:border-accent transition">
+                    Import More
+                </button>
+            </div>
+        `;
+    }
+}
+
+function showProgressError(message) {
+    const statusBadge = document.getElementById('progress-status');
+    statusBadge.classList.remove('animate-pulse', 'bg-warning/20', 'text-warning');
+    statusBadge.classList.add('bg-error/20', 'text-error');
+    statusBadge.textContent = 'Error';
+    
+    const completionDiv = document.getElementById('completion-message');
+    completionDiv.classList.remove('hidden');
+    completionDiv.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-error/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <p class="font-medium text-primary">Import Failed</p>
+                <p class="text-sm text-muted">${message}</p>
+            </div>
+        </div>
+        <div class="mt-4 flex gap-3">
+            ${currentJobId ? `
+            <a href="/jobs/${currentJobId}" class="flex-1 text-center bg-accent hover:bg-accent-hover text-white font-medium py-2 px-4 rounded-lg transition">
+                View Log
+            </a>
+            ` : ''}
+            <button onclick="resetAndStartNew()" class="flex-1 text-center text-accent hover:text-accent-hover font-medium py-2 px-4 rounded-lg border border-border hover:border-accent transition">
+                Try Again
+            </button>
+        </div>
+    `;
+}
+
+async function checkJobStatus(jobId) {
+    try {
+        const response = await fetch(`/jobs/${jobId}/status`);
+        const data = await response.json();
+        
+        if (data.status === 'completed') {
+            showCompletionMessage({
+                total_imported: data.result?.total_imported || 0,
+                failed: data.result?.failed || 0
+            });
+        } else if (data.status === 'failed') {
+            showProgressError(data.error || 'Job failed');
+        } else {
+            setTimeout(() => startProgressMonitoring(jobId), 2000);
+        }
+    } catch (err) {
+        showProgressError('Lost connection to server');
+    }
+}
+
+function resetAndStartNew() {
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    
+    document.getElementById('progress-section').classList.add('hidden');
+    
+    resetForm();
+}
+
+window.addEventListener('beforeunload', function() {
+    if (eventSource) {
+        eventSource.close();
+    }
+});
+</script>
+{% endblock %}

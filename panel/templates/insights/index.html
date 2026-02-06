@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Insights - Aye Chef{% endblock %}
+
+{% block body %}
+<div class="max-w-2xl mx-auto py-8 px-4">
+    
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-10">
+        <div>
+            <h1 class="font-display text-3xl text-primary">Your Kitchen</h1>
+        </div>
+        <a href="/" class="text-accent hover:text-accent-hover font-medium">← Back</a>
+    </header>
+
+    {% if collection_story.total_recipes > 0 %}
+    
+    <!-- Collection Archetype -->
+    <section class="mb-10">
+        <div class="card rounded-xl p-6 md:p-8">
+            <!-- Archetype Code & Summary -->
+            {% if collection_story.archetype_code %}
+            <div class="flex items-center gap-4 mb-6">
+                <span class="font-mono text-2xl md:text-3xl font-bold text-accent tracking-wider">
+                    {{ collection_story.archetype_code }}
+                </span>
+                <span class="text-muted text-sm">Your kitchen type</span>
+            </div>
+            {% endif %}
+            
+            <!-- Summary -->
+            {% if collection_story.archetype_summary %}
+            <p class="text-lg md:text-xl text-primary leading-relaxed mb-6">
+                {{ collection_story.archetype_summary }}
+            </p>
+            {% endif %}
+            
+            <!-- Dimension Breakdown -->
+            {% if collection_story.dimensions %}
+            <div class="space-y-4 pt-6 border-t border-border">
+                
+                {% if collection_story.dimensions.breadth %}
+                <div class="flex items-start gap-4">
+                    <span class="font-mono text-lg font-bold text-accent w-8">{{ collection_story.dimensions.breadth.code }}</span>
+                    <div>
+                        <span class="text-primary font-medium">{{ collection_story.dimensions.breadth.label }}</span>
+                        <span class="text-muted ml-2">{{ collection_story.dimensions.breadth.description }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if collection_story.dimensions.protein %}
+                <div class="flex items-start gap-4">
+                    <span class="font-mono text-lg font-bold text-accent w-8">{{ collection_story.dimensions.protein.code }}</span>
+                    <div>
+                        <span class="text-primary font-medium">{{ collection_story.dimensions.protein.label }}</span>
+                        <span class="text-muted ml-2">{{ collection_story.dimensions.protein.description }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if collection_story.dimensions.method %}
+                <div class="flex items-start gap-4">
+                    <span class="font-mono text-lg font-bold text-accent w-8">{{ collection_story.dimensions.method.code }}</span>
+                    <div>
+                        <span class="text-primary font-medium">{{ collection_story.dimensions.method.label }}</span>
+                        <span class="text-muted ml-2">{{ collection_story.dimensions.method.description }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                
+            </div>
+            {% endif %}
+            
+            <!-- Top Cuisines -->
+            {% if collection_story.top_cuisines|length > 1 %}
+            <div class="mt-6 pt-6 border-t border-border">
+                <p class="text-xs text-muted uppercase tracking-wide mb-3">Top Cuisines</p>
+                <div class="flex flex-wrap gap-3">
+                    {% for cuisine, count, pct in collection_story.top_cuisines[:5] %}
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium text-primary">{{ cuisine }}</span>
+                        <span class="text-xs text-muted bg-subtle px-2 py-0.5 rounded">{{ pct }}%</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Exploration Stats -->
+    <section class="mb-10">
+        <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-4 px-1">
+            Exploration
+        </h2>
+        
+        <div class="card rounded-xl p-6">
+            <div class="text-center mb-6">
+                <p class="text-5xl font-light text-primary tracking-tight">
+                    {{ "{:,}".format(coverage.explored_count) }}
+                </p>
+                <p class="text-muted mt-2">
+                    of {{ "{:,}".format(coverage.total_recipes) }} recipes explored
+                </p>
+            </div>
+            
+            <!-- Coverage bar -->
+            <div class="relative h-3 bg-subtle rounded-full overflow-hidden">
+                <div class="absolute inset-y-0 left-0 bg-accent rounded-full transition-all duration-500"
+                     style="width: {{ [coverage.coverage_percent, 100]|min }}%"></div>
+            </div>
+            
+            <div class="flex justify-between mt-3 text-sm">
+                <span class="text-muted">{{ coverage.coverage_percent }}% coverage</span>
+                <span class="text-muted">{{ "{:,}".format(coverage.unexplored_count) }} still undiscovered</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- This Week -->
+    {% if this_week.has_data %}
+    <section class="mb-10">
+        <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-4 px-1">
+            This Week <span class="normal-case font-normal ml-1">{{ this_week.week_label }}</span>
+        </h2>
+        
+        <div class="card rounded-xl p-6">
+            <!-- Cuisine distribution -->
+            {% if this_week.cuisine_counts %}
+            <div class="mb-5">
+                <p class="text-sm text-muted mb-3">Cuisines</p>
+                <div class="flex flex-wrap gap-2">
+                    {% for cuisine, count in this_week.cuisine_counts|dictsort(by='value', reverse=true) %}
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-subtle rounded-lg text-sm">
+                        <span class="text-primary">{{ cuisine }}</span>
+                        <span class="text-muted text-xs">{{ count }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Summary line -->
+            <div class="flex items-center gap-4 text-sm text-muted pt-4 border-t border-border">
+                <span>{{ this_week.meal_count }} meals planned</span>
+                {% if this_week.fallback_count == 0 %}
+                <span class="text-success">All from your collection</span>
+                {% else %}
+                <span>{{ this_week.fallback_count }} AI-generated</span>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty state -->
+    <div class="card rounded-xl p-8 text-center">
+        <p class="text-xl text-primary mb-2">No recipes yet</p>
+        <p class="text-muted mb-6">Import some recipes to see your collection insights.</p>
+        <a href="/import" class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors">
+            Import Recipes →
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

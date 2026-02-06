@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}History - Aye Chef{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<header class="flex items-center justify-between mb-8">
+    <h1 class="font-display text-3xl text-primary">History</h1>
+    <nav class="flex items-center gap-4 text-sm">
+        {% if recent %}
+        <button onclick="clearAllJobs()" class="text-error/70 hover:text-error transition">
+            Clear All
+        </button>
+        {% endif %}
+        <a href="/" class="text-accent hover:text-accent-hover font-medium">← Back</a>
+    </nav>
+</header>
+
+{% if active %}
+<!-- Active Jobs -->
+<div class="card rounded-xl p-4 mb-4 border-l-4 border-warning">
+    <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-3 flex items-center">
+        <span class="w-2 h-2 bg-warning rounded-full mr-2 animate-pulse"></span>
+        Running
+    </h2>
+    {% for job in active %}
+    <div class="flex items-center justify-between py-2 {% if not loop.last %}border-b border-border{% endif %}">
+        <div>
+            <a href="/jobs/{{ job.id }}" class="font-medium text-accent hover:text-accent-hover transition">
+                {{ job.tool_name }}
+            </a>
+            <span class="text-xs text-muted ml-2">{{ job.created_at[11:16] }}</span>
+        </div>
+        <span class="px-2 py-0.5 bg-warning/20 text-warning rounded text-xs font-medium">
+            {{ job.status }}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent Jobs -->
+<div class="card rounded-xl p-4">
+    <h2 class="text-xs font-semibold text-muted uppercase tracking-wide mb-3">Recent</h2>
+    {% if recent %}
+    <div class="divide-y divide-border">
+        {% for job in recent %}
+        <div class="flex items-center justify-between py-3" id="job-{{ job.id }}">
+            <div class="min-w-0 flex-1">
+                <a href="/jobs/{{ job.id }}" class="font-medium text-primary hover:text-accent transition block truncate">
+                    {{ job.tool_name }}
+                </a>
+                <span class="text-xs text-muted">{{ job.created_at[:10] }}</span>
+            </div>
+            <div class="flex items-center gap-2 ml-3">
+                <span class="px-2 py-0.5 rounded text-xs font-medium
+                    {% if job.status == 'completed' %}bg-success/20 text-success
+                    {% elif job.status == 'cancelled' %}bg-warning/20 text-warning
+                    {% else %}bg-error/20 text-error{% endif %}">
+                    {{ job.status }}
+                </span>
+                <button onclick="deleteJob('{{ job.id }}')" 
+                        class="p-1 text-muted hover:text-error transition"
+                        title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-8 text-sm">No jobs yet</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if active %}
+<script>setTimeout(() => location.reload(), 10000);</script>
+{% endif %}
+
+<script>
+function deleteJob(jobId) {
+    fetch(`/jobs/${jobId}/delete`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const el = document.getElementById(`job-${jobId}`);
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(20px)';
+                el.style.transition = 'all 0.2s ease-out';
+                setTimeout(() => el.remove(), 200);
+            }
+        });
+}
+
+function clearAllJobs() {
+    if (!confirm('Clear all completed jobs?')) return;
+    fetch('/jobs/clear', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => { if (data.success) location.reload(); });
+}
+</script>
+{% endblock %}

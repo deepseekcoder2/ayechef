@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme.id }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Aye Chef{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    {# Theme CSS Variables - Injected from themes.json #}
+    <style id="theme-variables">
+        :root {
+            --bg-base: {{ theme.colors['bg-base'] }};
+            --bg-card: {{ theme.colors['bg-card'] }};
+            --bg-subtle: {{ theme.colors['bg-subtle'] }};
+            --text-primary: {{ theme.colors['text-primary'] }};
+            --text-muted: {{ theme.colors['text-muted'] }};
+            --accent: {{ theme.colors['accent'] }};
+            --accent-hover: {{ theme.colors['accent-hover'] }};
+            --success: {{ theme.colors['success'] }};
+            --error: {{ theme.colors['error'] }};
+            --warning: {{ theme.colors['warning'] }};
+            --border: {{ theme.colors['border'] }};
+            --border-strong: {{ theme.colors['border-strong'] }};
+            
+            /* Chart colors */
+            --chart-1: {{ theme.chart[0] }};
+            --chart-2: {{ theme.chart[1] }};
+            --chart-3: {{ theme.chart[2] }};
+            --chart-4: {{ theme.chart[3] }};
+            --chart-5: {{ theme.chart[4] }};
+            --chart-6: {{ theme.chart[5] }};
+            --chart-7: {{ theme.chart[6] }};
+            --chart-8: {{ theme.chart[7] }};
+            
+            /* Computed values for gradients */
+            --bg-gradient-from: {{ theme.colors['bg-base'] }};
+            --bg-gradient-to: {{ theme.colors['bg-subtle'] }};
+        }
+    </style>
+    
+    {# Tailwind Configuration - Uses CSS Variables #}
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Theme-aware colors using CSS variables
+                        base: 'var(--bg-base)',
+                        card: 'var(--bg-card)',
+                        subtle: 'var(--bg-subtle)',
+                        primary: 'var(--text-primary)',
+                        muted: 'var(--text-muted)',
+                        accent: {
+                            DEFAULT: 'var(--accent)',
+                            hover: 'var(--accent-hover)'
+                        },
+                        success: 'var(--success)',
+                        error: 'var(--error)',
+                        warning: 'var(--warning)',
+                        border: {
+                            DEFAULT: 'var(--border)',
+                            strong: 'var(--border-strong)'
+                        },
+                        // Legacy color mappings for compatibility
+                        cream: 'var(--bg-base)',
+                        warm: {
+                            50: 'var(--bg-base)',
+                            100: 'var(--bg-subtle)',
+                            200: 'var(--border)',
+                            800: 'var(--text-muted)',
+                            900: 'var(--text-primary)'
+                        },
+                        amber: {
+                            500: 'var(--accent)',
+                            600: 'var(--accent)',
+                            700: 'var(--accent-hover)'
+                        },
+                        sage: {
+                            100: 'var(--bg-subtle)',
+                            500: 'var(--success)',
+                            600: 'var(--success)'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+                        display: ['DM Serif Display', 'Georgia', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    
+    {# Base Styles #}
+    <style>
+        /* Body background gradient */
+        body {
+            background: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-subtle) 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+        
+        /* Card styling */
+        .card {
+            background: var(--bg-card);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        /* Dark theme adjustments */
+        [data-theme^="night"], [data-theme="espresso"], [data-theme="winter-hearth"],
+        [data-theme="slate-copper"], [data-theme="midnight-plum"], [data-theme="deep-ocean"],
+        [data-theme="japanese-ink"], [data-theme="forest-floor"] {
+            color-scheme: dark;
+        }
+        
+        [data-theme^="night"] .card, [data-theme="espresso"] .card, 
+        [data-theme="winter-hearth"] .card, [data-theme="slate-copper"] .card,
+        [data-theme="midnight-plum"] .card, [data-theme="deep-ocean"] .card,
+        [data-theme="japanese-ink"] .card, [data-theme="forest-floor"] .card {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Terminal styling (always dark) */
+        .terminal {
+            background: #1C1917;
+            user-select: text;
+            cursor: text;
+        }
+        .terminal::-webkit-scrollbar { width: 6px; }
+        .terminal::-webkit-scrollbar-track { background: #1C1917; }
+        .terminal::-webkit-scrollbar-thumb { background: #44403C; border-radius: 3px; }
+        .terminal div { user-select: text; }
+        
+        /* Details/summary styling */
+        details summary { cursor: pointer; }
+        details summary::-webkit-details-marker { display: none; }
+        
+        /* Modal overlay */
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(2px);
+        }
+        
+        /* Scrollbar styling for themed scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+        
+        /* Focus states */
+        *:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+        
+        /* Form inputs */
+        input, select, textarea {
+            background: var(--bg-subtle);
+            border-color: var(--border);
+            color: var(--text-primary);
+        }
+        input::placeholder, textarea::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+        }
+        
+        /* Buttons */
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        /* Status indicators */
+        .status-success { color: var(--success); }
+        .status-error { color: var(--error); }
+        .status-warning { color: var(--warning); }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="font-sans">
+    {% block body %}
+    <div class="max-w-lg mx-auto py-8 px-4">
+        {% block content %}{% endblock %}
+    </div>
+    {% endblock %}
+    
+    {# Theme Utilities Script - Must be before extra_scripts so child templates can use these #}
+    <script>
+        // Store all available themes for client-side preview
+        window.AYE_CHEF_THEMES = {{ themes_json|safe }};
+        
+        // Get chart colors array for current theme
+        window.getChartColors = function() {
+            const style = getComputedStyle(document.documentElement);
+            return [
+                style.getPropertyValue('--chart-1').trim(),
+                style.getPropertyValue('--chart-2').trim(),
+                style.getPropertyValue('--chart-3').trim(),
+                style.getPropertyValue('--chart-4').trim(),
+                style.getPropertyValue('--chart-5').trim(),
+                style.getPropertyValue('--chart-6').trim(),
+                style.getPropertyValue('--chart-7').trim(),
+                style.getPropertyValue('--chart-8').trim()
+            ];
+        };
+        
+        // Preview a theme without saving (for settings page)
+        window.previewTheme = function(themeId) {
+            const theme = window.AYE_CHEF_THEMES.find(t => t.id === themeId);
+            if (!theme) return;
+            
+            const root = document.documentElement;
+            root.setAttribute('data-theme', theme.id);
+            
+            // Update CSS variables
+            const colors = theme.colors;
+            root.style.setProperty('--bg-base', colors['bg-base']);
+            root.style.setProperty('--bg-card', colors['bg-card']);
+            root.style.setProperty('--bg-subtle', colors['bg-subtle']);
+            root.style.setProperty('--text-primary', colors['text-primary']);
+            root.style.setProperty('--text-muted', colors['text-muted']);
+            root.style.setProperty('--accent', colors['accent']);
+            root.style.setProperty('--accent-hover', colors['accent-hover']);
+            root.style.setProperty('--success', colors['success']);
+            root.style.setProperty('--error', colors['error']);
+            root.style.setProperty('--warning', colors['warning']);
+            root.style.setProperty('--border', colors['border']);
+            root.style.setProperty('--border-strong', colors['border-strong']);
+            
+            // Update chart colors
+            theme.chart.forEach((color, i) => {
+                root.style.setProperty(`--chart-${i + 1}`, color);
+            });
+            
+            // Update gradient
+            root.style.setProperty('--bg-gradient-from', colors['bg-base']);
+            root.style.setProperty('--bg-gradient-to', colors['bg-subtle']);
+        };
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

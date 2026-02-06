@@ -1,0 +1,61 @@
+# Cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Large reference files
+docs/mealie-openapi-formatted.json
+
+# Data files (should not be version controlled)
+data/
+cache/
+logs/
+*.db
+*.pkl
+*.index
+*.log
+*.json
+last_payload.json
+meal_plan.txt
+parsing_cache.json
+mealie_monitoring.log
+
+# API tokens (security - should be created by user)
+# data/secrets.yaml is covered by data/ ignore above
+*.token
+.env
+
+# User configuration (contains user-specific settings)
+config.yaml
+
+# IDE files
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Documentation build
+docs/_build/
+
+# Internal planning docs (not for public repo)
+docs/PRD.md
+docs/plans/
+
+# Site scrapers (user-generated via "Learn New Site")
+# The abstract base class and __init__ are versioned, but site-specific scrapers are not
+recipe_urls/sites/*.py
+!recipe_urls/sites/__init__.py
+data/scrapers/

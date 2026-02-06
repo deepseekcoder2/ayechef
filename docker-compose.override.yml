@@ -1,0 +1,29 @@
+# Development overrides - automatically loaded by docker compose
+# This mounts source code so changes are reflected without rebuilding
+#
+# For production: rename/delete this file, or use:
+#   docker compose -f docker-compose.yml up
+#
+# For development (default when this file exists):
+#   docker compose up
+
+services:
+  web:
+    volumes:
+      # Mount entire project for live code reloading
+      - .:/app:ro
+      # But keep data writable
+      - ./data:/app/data
+      # Use host's huggingface cache (has embedding model)
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - FLASK_DEBUG=1  # Enable auto-reload
+
+  worker:
+    volumes:
+      # Mount entire project for live code reloading
+      - .:/app:ro
+      # But keep data writable
+      - ./data:/app/data
+      # Use host's huggingface cache (has embedding model)
+      - ~/.cache/huggingface:/root/.cache/huggingface

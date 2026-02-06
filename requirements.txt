@@ -1,0 +1,31 @@
+# Aye Chef - Dependencies
+# ========================
+
+# HTTP & API
+requests>=2.31.0
+aiohttp>=3.9.0
+urllib3>=2.0.0
+
+# Recipe scraping
+recipe-scrapers>=15.11.0
+beautifulsoup4>=4.12.0
+
+# Data & ML
+numpy>=1.24.0
+sentence-transformers>=3.0.0
+accelerate>=0.20.0
+
+# Vector search
+usearch>=2.9.0
+
+# Config
+pyyaml>=6.0.0
+
+# CLI UI
+rich>=13.0.0
+tqdm>=4.66.0
+
+# Web panel
+flask>=3.0.0
+huey>=2.5.0
+gunicorn>=21.0.0

@@ -1,0 +1,310 @@
+# =============================================================================
+# Aye Chef Meal Planning Configuration
+# =============================================================================
+# Copy this file to config.yaml and customize for your setup.
+# Environment variables override these values where noted.
+#
+# REQUIRED: This file must exist for the system to run.
+# The system will fail with a clear error if config.yaml is missing.
+
+# -----------------------------------------------------------------------------
+# Connection Settings
+# -----------------------------------------------------------------------------
+connection:
+  # Your Mealie server URL (can also use MEALIE_URL env var)
+  mealie_url: "http://localhost:9000"  # Change to match your Mealie host:port
+  
+  # API tokens: Set via environment variables or data/secrets.yaml
+  # Required:
+  #   - MEALIE_TOKEN: Your Mealie API token
+  #   - OPENROUTER_API_KEY: Your OpenRouter API key
+  # Optional:
+  #   - BRAVE_API_KEY: Brave Search API key (for recipe image search)
+
+# -----------------------------------------------------------------------------
+# Mealie Server Settings
+# -----------------------------------------------------------------------------
+mealie:
+  # Maximum concurrent API requests to Mealie
+  # Default is 2 (safe for SQLite, Mealie's default backend)
+  # 
+  # SQLite can only handle one writer at a time - higher values cause
+  # "database is locked" errors and 500s during bulk imports.
+  #
+  # If you're using PostgreSQL backend, you can increase to 10-15.
+  max_concurrent_requests: 2
+  
+  # Enable direct database access for read operations (OPTIONAL)
+  # 
+  # DB Mode (use_direct_db: true):
+  #   - Reads directly from Mealie's SQLite database file
+  #   - Provides ~500x faster read operations compared to API mode
+  #   - Writes still go through the API (DB is read-only)
+  #   - Requires Docker volume mount to access Mealie's database
+  #
+  # API Mode (use_direct_db: false, default):
+  #   - All operations (reads and writes) go through Mealie's REST API
+  #   - Works with any Mealie backend (SQLite or PostgreSQL)
+  #   - No special Docker configuration required
+  #
+  # Requirements for DB Mode:
+  #   - Add 'mealie_data:/mealie-data:ro' volume mount to docker-compose.yml
+  #   - Mealie must be using SQLite backend (PostgreSQL not supported for direct DB access)
+  #
+  # This setting can also be toggled via the web UI:
+  #   Settings → Advanced → Mealie data access (API mode / DB mode)
+  #
+  # Default: false (API mode)
+  use_direct_db: false
+
+# -----------------------------------------------------------------------------
+# Household Settings
+# -----------------------------------------------------------------------------
+household:
+  # Number of servings to plan for
+  servings: 4
+  
+  # Which meals to plan (options: breakfast, lunch, dinner, snack)
+  meal_types:
+    - lunch
+    - dinner
+  
+  # Who you're cooking for - be as detailed as you like
+  # This helps the AI understand your household for better meal planning
+  # Examples: "Family of 4", "2 adults, 2 kids (ages 5 and 7)", "Couple who loves spicy food"
+  description: ""
+
+# -----------------------------------------------------------------------------
+# Preferences (optional)
+# -----------------------------------------------------------------------------
+preferences:
+  # Preferred cuisines - comma-separated keywords
+  # Empty = AI will vary automatically
+  # Examples: italian, mexican, chinese, japanese, indian, thai
+  cuisines: []
+  
+  # Hard restrictions - comma-separated keywords for filtering
+  # These are enforced when generating recipes
+  # Examples: vegetarian, vegan, gluten-free, dairy-free, nut-free
+  dietary_restrictions: []
+
+# -----------------------------------------------------------------------------
+# AI Context (optional)
+# -----------------------------------------------------------------------------
+# Natural language context that helps the AI make better decisions.
+# These are softer guidelines, not hard filters like dietary_restrictions.
+personal:
+  # Dietary notes - one per line, natural language
+  # Use for nuanced situations the AI should consider
+  # Examples:
+  #   - "Wife is vegetarian but kids eat meat"
+  #   - "Trying to reduce sodium"
+  #   - "Picky eaters - avoid unusual ingredients"
+  dietary: []
+  
+  # Your kitchen situation - time, equipment, skill level
+  # Examples: "30 min weeknights", "No instant pot", "Beginner cook"
+  cooking: ""
+
+# -----------------------------------------------------------------------------
+# AI Tuning (Optional)
+# -----------------------------------------------------------------------------
+# Minimal knobs that change AI behavior without editing prompts directly.
+# All fields are optional; defaults are applied if omitted.
+#
+# These settings are also editable via the web UI:
+#   Settings → AI Tuning
+#
+shopping:
+  exclusions:
+    # Items to always exclude from shopping lists (one per line in UI).
+    # Use for household-specific "never buy" items that you don't want to appear
+    # even if recipes include them (e.g., "soy sauce" if you already stock it).
+    always_exclude: []
+
+meal_planning:
+  variety:
+    # Avoid repeating the same protein too often across the week.
+    # Default: 2
+    max_protein_repetitions_per_week: 2
+    # Avoid long streaks of the same cuisine/region.
+    # Default: 3 (i.e., avoid 3+ consecutive meals of same cuisine)
+    max_consecutive_same_cuisine: 3
+
+# -----------------------------------------------------------------------------
+# Pantry Staples (items you always have - excluded from shopping lists)
+# -----------------------------------------------------------------------------
+# These items will be filtered out of shopping lists since you always have them.
+# Add items specific to your household's cooking style.
+pantry:
+  staples:
+    # Salt & Pepper
+    - salt
+    - sea salt
+    - kosher salt
+    - pepper
+    - black pepper
+    - white pepper
+    
+    # Cooking Oils
+    - oil
+    - cooking oil
+    - vegetable oil
+    - olive oil
+    - canola oil
+    
+    # Vinegars
+    - vinegar
+    - white vinegar
+    - rice vinegar
+    
+    # Baking Staples
+    - flour
+    - all-purpose flour
+    - sugar
+    - brown sugar
+    - baking powder
+    - baking soda
+    - cornstarch
+    
+    # Basic Rice (NOT specialty rice like basmati, jasmine, arborio)
+    - rice
+    - white rice
+    
+    # Common Condiments
+    - ketchup
+    - mustard
+    - mayonnaise
+    
+    # Dried Herbs & Spices (assumed in spice rack)
+    - garlic powder
+    - onion powder
+    - paprika
+    - cumin
+    - cinnamon
+    - oregano
+    - basil
+    - thyme
+    
+    # =========================================================================
+    # ADD YOUR OWN STAPLES BELOW
+    # =========================================================================
+    # Examples for Asian cooking:
+    # - soy sauce
+    # - light soy sauce
+    # - dark soy sauce
+    # - oyster sauce
+    # - sesame oil
+    # - fish sauce
+    # - hoisin sauce
+    # - rice vinegar
+    # - five-spice powder
+    # - garlic
+    # - ginger
+    # - scallion
+
+# -----------------------------------------------------------------------------
+# LLM Settings
+# -----------------------------------------------------------------------------
+llm:
+  # Chat model for planning (OpenRouter model ID)
+  # Popular options:
+  # - openai/gpt-4o-mini (fast, cheap, good quality)
+  # - openai/gpt-4o (higher quality, more expensive)
+  # - anthropic/claude-3-haiku (fast, cheap)
+  # - x-ai/grok-4.1-fast (fast, good for structured output)
+  chat_model: "openai/gpt-4o-mini"
+  
+  # Embedding model for recipe search (local model via sentence-transformers)
+  # NOTE: Changing this after indexing recipes will require rebuilding the index
+  # NOTE: embedding_dimension is fixed at 4096 and not configurable
+  #       (changing it would corrupt existing recipe indexes)
+  embedding_model: "nvidia/llama-embed-nemotron-8b"
+
+# -----------------------------------------------------------------------------
+# Image Search Settings (Optional)
+# -----------------------------------------------------------------------------
+# Requires BRAVE_API_KEY in data/secrets.yaml or environment
+# If no key configured, image search is disabled automatically
+image_search:
+  # Suffix appended to recipe name when searching (e.g., "Pasta Carbonara recipe")
+  query_suffix: "recipe"
+  
+  # Minimum image dimensions (pixels) - filters out tiny thumbnails
+  min_width: 400
+  min_height: 300
+  
+  # How many Brave results to try before giving up
+  max_attempts: 3
+  
+  # Use vision model to validate image shows food (slower, more accurate)
+  # Requires working LLM configuration
+  use_vision_validation: true
+
+# -----------------------------------------------------------------------------
+# Hardware Settings
+# -----------------------------------------------------------------------------
+hardware:
+  # Compute device for embedding model
+  # Options: auto | cuda | mps | cpu
+  # 
+  # auto = detect best available in order: CUDA (NVIDIA/AMD) → MPS (Apple) → CPU
+  # cuda = NVIDIA GPU or AMD GPU with ROCm
+  # mps  = Apple Silicon (M1/M2/M3)
+  # cpu  = CPU only (slowest, but always works)
+  device: "auto"
+  
+  # Batch size for embedding generation
+  # Higher = faster but uses more VRAM/unified memory
+  # 
+  # NOTE: The default embedding model (nvidia/llama-embed-nemotron-8b) requires
+  # ~16GB just for model weights in bfloat16. The batch size setting controls
+  # how much ADDITIONAL memory is used during embedding generation.
+  # 
+  # Minimum hardware: 16GB VRAM (NVIDIA) / 32GB unified (Apple Silicon) / 24GB RAM (CPU)
+  # 
+  # Recommended batch sizes (after model is loaded):
+  #   - 16GB VRAM:          16-32   (tight — model uses most of the VRAM)
+  #   - 24GB VRAM:          32-64
+  #   - 32GB unified:       32-64
+  #   - 64GB+ unified:      128-256
+  #   - 192GB+ unified:     256-512
+  # 
+  # Default: 32 (works on 16GB+ VRAM or 32GB+ unified memory)
+  embedding_batch_size: 32
+
+# -----------------------------------------------------------------------------
+# Parallelism Settings (Bulk Import Pipeline)
+# -----------------------------------------------------------------------------
+# These settings control concurrent operations during bulk recipe imports.
+# Choose a preset matching your hardware, or customize individual phases.
+#
+# Available presets:
+#   - apple_silicon_8gb   : Mac Mini, MacBook Air (8GB unified memory)
+#   - apple_silicon_16gb  : MacBook Pro 14" (16GB unified memory)
+#   - apple_silicon_32gb  : MacBook Pro 16", Mac Studio M1 (32GB+)
+#   - apple_silicon_max   : Mac Studio M2/M3 Ultra (64GB+ unified memory)
+#   - nvidia_gpu          : PC with NVIDIA GPU running local LLM
+#   - cloud_api           : Using OpenRouter/OpenAI cloud APIs (default)
+#   - conservative        : Limited resources or unstable network
+#
+parallelism:
+  # Select a preset (see descriptions above)
+  # Default is "conservative" - safe for SQLite (Mealie's default)
+  # Switch to "cloud_api" if you have PostgreSQL backend
+  preset: "conservative"
+  
+  # Optional: Override individual phase settings
+  # Uncomment and modify to customize beyond the preset
+  #
+  # discovery:
+  #   workers: 10          # Concurrent sitemap/URL fetching
+  # import:
+  #   workers: 8           # Concurrent recipe imports to Mealie
+  # tagging:
+  #   workers: 15          # Concurrent LLM calls for tagging
+  # parsing:
+  #   workers: 15          # Concurrent ingredient parsing
+  # indexing:
+  #   workers: 6           # Concurrent RAG indexing operations
+  #   batch_size: 75       # Recipes per indexing batch

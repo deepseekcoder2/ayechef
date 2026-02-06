@@ -1,0 +1,716 @@
+{% extends "base.html" %}
+
+{% block title %}Aye Chef{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Confirmation modal */
+    .modal-overlay { background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); }
+</style>
+{% endblock %}
+
+{# Macro to render a single tool #}
+{% macro render_tool(tool) %}
+<form action="/maintenance/{{ tool.id }}" method="POST" class="flex items-center justify-between py-3"
+      {% if tool.confirm_message %}data-confirm="{{ tool.confirm_message }}"{% endif %}>
+    <div class="flex-1 min-w-0 mr-3">
+        <span class="font-medium text-sm text-primary">{{ tool.name }}</span>
+        {% if tool.dangerous %}<span class="text-error text-xs ml-1">⚠</span>{% endif %}
+        <p class="text-xs text-muted">{{ tool.description }}</p>
+    </div>
+    {% for param in tool.params %}
+    {% if param.type == 'text' %}
+    <input type="text" name="{{ param.name }}" placeholder="{{ param.label }}" 
+           {% if param.required %}required{% endif %}
+           class="px-2 py-1 bg-subtle border border-border rounded text-sm w-28 mr-2">
+    {% elif param.type == 'select' %}
+    <select name="{{ param.name }}" 
+            {% if param.required %}required{% endif %}
+            class="px-2 py-1 bg-subtle border border-border rounded text-sm w-28 mr-2">
+        {% for option in param.options %}
+        <option value="{{ option }}" {% if option == param.default %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    {% endfor %}
+    <button type="submit" class="px-3 py-1 bg-subtle hover:bg-border rounded text-sm font-medium text-primary transition">Run</button>
+</form>
+{% endmacro %}
+
+{% block content %}
+<!-- Header -->
+<header class="flex items-center justify-between mb-8">
+    <h1 class="font-display text-3xl text-primary">Aye Chef</h1>
+    <nav class="flex items-center gap-4 text-sm">
+        <a href="/insights" class="text-muted hover:text-primary transition">Insights</a>
+        <a href="/jobs" class="text-muted hover:text-primary transition">History</a>
+        {% if mealie.url %}
+        <a href="{{ mealie.url }}" target="_blank" 
+           class="text-accent hover:text-accent-hover flex items-center gap-1 font-medium">
+            Mealie <span class="text-xs">↗</span>
+        </a>
+        {% endif %}
+    </nav>
+</header>
+
+<!-- Connection Status -->
+{% if not first_run %}
+<div class="mb-6 flex items-center gap-2 text-sm">
+    {% if mealie.connected %}
+    <span class="w-2 h-2 bg-success rounded-full"></span>
+    <span class="text-muted">Connected</span>
+    {% else %}
+    <span class="w-2 h-2 bg-error rounded-full"></span>
+    <span class="text-error">Not connected</span>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Active Job Alert -->
+{% if active_job %}
+<div class="card rounded-xl p-4 mb-6 border-l-4 border-warning">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span class="w-2 h-2 bg-warning rounded-full animate-pulse"></span>
+            <span class="font-medium text-primary">{{ active_job.tool_name }}</span>
+            <span class="text-muted text-sm">running</span>
+        </div>
+        <a href="/jobs/{{ active_job.id }}" class="text-accent hover:text-accent-hover text-sm font-medium">View →</a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Setup Required Banner -->
+{% if planning_ready and not planning_ready.ready %}
+<div class="card rounded-xl p-4 mb-6 border-l-4 border-warning">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center text-warning">!</span>
+            <div>
+                <p class="font-medium text-primary">Setup required</p>
+                <p class="text-muted text-sm">{{ planning_ready.message }}</p>
+            </div>
+        </div>
+        <a href="/status" class="text-accent hover:text-accent-hover font-medium text-sm">
+            View Status →
+        </a>
+    </div>
+</div>
+{% elif recipe_quality and recipe_quality.needs_maintenance and recipe_quality.untagged > 50 %}
+<!-- Recipe Quality Status (subtle with action) - only show if planning is ready -->
+<div class="mb-4 px-3 py-2 bg-subtle rounded-lg border border-border">
+    <div class="flex items-center justify-between text-sm">
+        <span class="text-muted">
+            <span class="text-warning">●</span>
+            {{ recipe_quality.untagged }} recipes could use tagging for better suggestions
+        </span>
+        <form action="/maintenance/repair_optimize" method="POST" class="inline">
+            <button type="submit" class="text-accent hover:text-accent-hover font-medium">
+                Run Maintenance →
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- First Run Setup -->
+{% if first_run %}
+<div class="card rounded-xl p-6 mb-6">
+    <h2 class="font-display text-2xl text-primary mb-2">Welcome!</h2>
+    <p class="text-muted mb-6">Let's connect to your Mealie server.</p>
+    <form action="/settings" method="POST" class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-muted mb-2">Mealie URL</label>
+            <input type="url" name="mealie_url" required
+                   placeholder="http://192.168.1.100:9000"
+                   class="w-full px-4 py-3 bg-subtle border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-muted mb-2">Servings</label>
+                <input type="number" name="servings" value="4" min="1" max="20"
+                       class="w-full px-4 py-3 bg-subtle border border-border rounded-lg focus:ring-2 focus:ring-accent outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-muted mb-2">Meals</label>
+                <div class="flex gap-4 py-3">
+                    <label class="flex items-center text-sm"><input type="checkbox" name="meal_types" value="lunch" checked class="mr-2 accent-accent"> Lunch</label>
+                    <label class="flex items-center text-sm"><input type="checkbox" name="meal_types" value="dinner" checked class="mr-2 accent-accent"> Dinner</label>
+                </div>
+            </div>
+        </div>
+        <input type="hidden" name="chat_model" value="openai/gpt-4o-mini">
+        <input type="hidden" name="embedding_model" value="nvidia/llama-embed-nemotron-8b">
+        <button type="submit" class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 rounded-lg transition">
+            Get Started
+        </button>
+    </form>
+</div>
+
+{% else %}
+
+<!-- MAIN: Plan Meals -->
+<div class="card rounded-xl p-6 mb-4">
+    <form action="/plan" method="POST">
+        <label class="block text-sm font-medium text-muted mb-2">Week starting</label>
+        <input type="date" name="start_date" value="{{ next_monday }}"
+               class="w-full px-4 py-3 bg-subtle border border-border rounded-lg text-lg focus:ring-2 focus:ring-accent outline-none mb-4">
+        
+        <div class="mb-4">
+            <details class="mb-2 group">
+                <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Special instructions <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">One-time instructions that override your defaults. For special occasions like hosting a large dinner.</p>
+            </details>
+            <textarea name="temp_prompt" rows="2"
+                      class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none resize-none"></textarea>
+        </div>
+        
+        <details class="mb-4">
+            <summary class="text-sm text-muted hover:text-primary transition flex items-center gap-1">
+                <span>Customize</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="mt-4 space-y-4 pt-4 border-t border-border">
+                <div>
+                    <details class="mb-2 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Preferred cuisines <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Override your default cuisines for this plan only</p>
+                    </details>
+                    <input type="text" name="cuisines" 
+                           value="{{ (config.preferences.cuisines | join(', ')) if config.preferences and config.preferences.cuisines else '' }}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <div>
+                    <details class="mb-2 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Dietary restrictions <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Override your default restrictions for this plan only</p>
+                    </details>
+                    <input type="text" name="restrictions"
+                           value="{{ (config.preferences.dietary_restrictions | join(', ')) if config.preferences and config.preferences.dietary_restrictions else '' }}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+            </div>
+        </details>
+        
+        <div class="mb-5 space-y-2 text-sm">
+            <label class="flex items-center text-muted hover:text-primary transition cursor-pointer">
+                <input type="checkbox" name="dry_run" class="mr-2 accent-accent">
+                Diagnostic mode (no changes)
+            </label>
+        </div>
+        
+        {% if planning_ready and planning_ready.ready %}
+        <button type="submit" 
+                class="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-4 rounded-xl text-lg transition transform hover:scale-[1.01] active:scale-[0.99]">
+            Generate Meal Plan
+        </button>
+        {% else %}
+        <button type="button" disabled
+                class="w-full bg-border text-muted font-semibold py-4 rounded-xl text-lg cursor-not-allowed">
+            Generate Meal Plan
+        </button>
+        <p class="text-center text-sm text-muted mt-2">
+            <a href="/status" class="text-accent hover:text-accent-hover">Complete setup</a> to enable meal planning
+        </p>
+        {% endif %}
+    </form>
+    
+    {% if last_plan %}
+    <div class="mt-4 pt-4 border-t border-border text-sm flex items-center justify-between">
+        <span class="text-muted">
+            Last: {{ last_plan.created_at[:10] }}
+            {% if last_plan.status == 'completed' %}<span class="text-success ml-1">✓</span>
+            {% elif last_plan.status == 'failed' %}<span class="text-error ml-1">✗</span>
+            {% elif last_plan.status == 'running' %}<span class="text-warning ml-1">●</span>{% endif %}
+        </span>
+        <a href="/jobs/{{ last_plan.id }}" class="text-accent hover:text-accent-hover font-medium">View</a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Collapsible Sections -->
+<a href="/import" class="card rounded-xl mb-3 p-4 flex items-center justify-between hover:bg-subtle transition">
+    <div>
+        <span class="font-medium text-primary">Import Recipes</span>
+        <p class="text-sm text-muted mt-0.5">Add recipes from any URL</p>
+    </div>
+    <svg class="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+</a>
+
+<details class="card rounded-xl mb-3 group">
+    <summary class="p-4 font-medium flex items-center justify-between">
+        <span class="text-primary">Maintenance</span>
+        <svg class="w-5 h-5 text-muted group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </summary>
+    <div class="px-4 pb-4 border-t border-border">
+        <!-- System Status Link -->
+        <a href="/status" class="flex items-center justify-between py-3 border-b border-border hover:bg-subtle -mx-4 px-4">
+            <div>
+                <span class="font-medium text-sm text-primary">System Status</span>
+                <p class="text-xs text-muted">Check prerequisites and health</p>
+            </div>
+            <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        <!-- Reset Worker -->
+        <div class="flex items-center justify-between py-3 border-b border-border">
+            <div>
+                <span class="font-medium text-sm text-primary">Reset Worker</span>
+                <span class="text-xs text-warning ml-1">recovery</span>
+                <p class="text-xs text-muted">Force cancel stuck jobs</p>
+            </div>
+            <button type="button" onclick="resetWorker()" id="reset-worker-btn"
+                    class="px-3 py-1 bg-warning/20 hover:bg-warning/30 rounded text-sm font-medium text-warning transition">
+                Reset
+            </button>
+        </div>
+        <p id="reset-worker-status" class="text-xs py-2 hidden"></p>
+        
+        <!-- ROUTINE: Safe tasks to run regularly -->
+        {% if maintenance_groups.routine %}
+        <div class="mt-3">
+            <p class="text-xs font-medium text-muted uppercase tracking-wide mb-2">Routine</p>
+            <div class="divide-y divide-border">
+                {% for tool in maintenance_groups.routine %}
+                {{ render_tool(tool) }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- CLEANUP: Destructive tasks -->
+        {% if maintenance_groups.cleanup %}
+        <div class="mt-4">
+            <p class="text-xs font-medium text-error/70 uppercase tracking-wide mb-2">Cleanup <span class="normal-case">(deletes data)</span></p>
+            <div class="divide-y divide-border">
+                {% for tool in maintenance_groups.cleanup %}
+                {{ render_tool(tool) }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- ADVANCED: Recovery and debug tools (collapsed) -->
+        {% if maintenance_groups.advanced %}
+        <details class="mt-4">
+            <summary class="text-xs font-medium text-muted uppercase tracking-wide mb-2 cursor-pointer hover:text-primary">
+                Advanced ▸
+            </summary>
+            <div class="divide-y divide-border mt-2">
+                {% for tool in maintenance_groups.advanced %}
+                {{ render_tool(tool) }}
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    </div>
+</details>
+
+<details id="settings" class="card rounded-xl mb-3 group">
+    <summary class="p-4 font-medium flex items-center justify-between">
+        <span class="text-primary">Settings</span>
+        <svg class="w-5 h-5 text-muted group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </summary>
+    <div class="px-4 pb-4 border-t border-border">
+        <form action="/settings" method="POST" class="space-y-4 mt-3">
+            <!-- Theme Selector -->
+            <div>
+                <label class="block text-sm font-medium text-muted mb-2">Theme</label>
+                <select name="theme" id="theme-select" onchange="previewTheme(this.value)"
+                        class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    {% for t in themes_json|from_json %}
+                    <option value="{{ t.id }}" {% if t.id == current_theme_id %}selected{% endif %}>
+                        {{ t.name }}{% if t.type == 'dark' %} (Dark){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-muted mt-1">Choose your preferred color theme</p>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-muted mb-2">Mealie URL</label>
+                <div class="flex gap-2">
+                    <input type="url" name="mealie_url" id="mealie_url"
+                           value="{{ config.connection.mealie_url }}"
+                           class="flex-1 px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    <button type="button" onclick="testConnection()" 
+                            class="px-3 py-2 bg-subtle hover:bg-border rounded-lg text-sm font-medium transition">Test</button>
+                </div>
+                <p id="connection-status" class="text-xs mt-1"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Servings</label>
+                    <input type="number" name="servings" value="{{ config.household.servings }}" min="1"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Meals</label>
+                    <div class="flex gap-3 py-2">
+                        <label class="text-sm"><input type="checkbox" name="meal_types" value="lunch" {% if 'lunch' in config.household.meal_types %}checked{% endif %} class="mr-1 accent-accent">Lunch</label>
+                        <label class="text-sm"><input type="checkbox" name="meal_types" value="dinner" {% if 'dinner' in config.household.meal_types %}checked{% endif %} class="mr-1 accent-accent">Dinner</label>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <details class="mb-2 group">
+                    <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Your household <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                    <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Who you're cooking for - family size, ages, preferences</p>
+                </details>
+                <input type="text" name="description" value="{{ config.household.description }}"
+                       class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+            </div>
+            
+            <div>
+                <details class="mb-2 group">
+                    <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Pantry <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                    <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Items you always have - excluded from shopping lists. One per line.</p>
+                </details>
+                <textarea name="staples" rows="3"
+                          class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm font-mono focus:ring-2 focus:ring-accent outline-none">{% for s in config.pantry.staples %}{{ s }}
+{% endfor %}</textarea>
+            </div>
+            
+            <!-- AI Preferences -->
+            <div class="pt-3 mt-3 border-t border-border space-y-3">
+                <details class="group">
+                    <summary class="text-xs text-muted uppercase tracking-wide cursor-pointer list-none flex items-center gap-1">AI Preferences <span class="opacity-40 group-open:opacity-70">ⓘ</span></summary>
+                    <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border normal-case">Customize how the AI plans your meals</p>
+                </details>
+                <div>
+                    <details class="mb-1 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Favorites <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Cuisines you want to see more of. Comma-separated.</p>
+                    </details>
+                    <input type="text" name="cuisines" value="{{ config.preferences.cuisines | join(', ') }}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <div>
+                    <details class="mb-1 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Avoid <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Hard restrictions - things to always exclude. Comma-separated.</p>
+                    </details>
+                    <input type="text" name="restrictions" value="{{ config.preferences.dietary_restrictions | join(', ') }}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <div>
+                    <details class="mb-1 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Dietary notes <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Natural language notes for the AI. One per line.</p>
+                    </details>
+                    <textarea name="personal_dietary" rows="2"
+                              class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none resize-none">{% if config.personal and config.personal.dietary %}{% for d in config.personal.dietary %}{{ d }}
+{% endfor %}{% endif %}</textarea>
+                </div>
+                <div>
+                    <details class="mb-1 group">
+                        <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Your kitchen <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                        <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Time, equipment, or skill constraints</p>
+                    </details>
+                    <input type="text" name="personal_cooking"
+                           value="{{ config.personal.cooking if config.personal else '' }}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+
+                <!-- AI Tuning (collapsed) -->
+                <details class="mt-2">
+                    <summary class="text-xs font-medium text-muted uppercase tracking-wide cursor-pointer list-none flex items-center gap-1 hover:text-primary">
+                        AI Tuning <span class="opacity-40 group-open:opacity-70">ⓘ</span>
+                    </summary>
+                    <div class="mt-3 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-muted mb-2">Max protein repeats / week</label>
+                                <input type="number" name="max_protein_repeats_per_week" min="1" max="14"
+                                       value="{{ config.get('meal_planning', {}).get('variety', {}).get('max_protein_repetitions_per_week', 2) }}"
+                                       class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                                <p class="text-xs text-muted mt-1">Lower = more variety</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-muted mb-2">Max consecutive same cuisine</label>
+                                <input type="number" name="max_consecutive_same_cuisine" min="1" max="14"
+                                       value="{{ config.get('meal_planning', {}).get('variety', {}).get('max_consecutive_same_cuisine', 3) }}"
+                                       class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                                <p class="text-xs text-muted mt-1">Avoid long streaks of one cuisine</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <details class="mb-2 group">
+                                <summary class="text-sm font-medium text-muted cursor-pointer list-none flex items-center gap-1">Always exclude from shopping <span class="opacity-40 group-open:opacity-70 text-xs">ⓘ</span></summary>
+                                <p class="text-xs text-muted mt-1 pl-1 border-l-2 border-border">Items to never include in shopping output (one per line). Separate from pantry staples.</p>
+                            </details>
+                            <textarea name="shopping_always_exclude" rows="3"
+                                      class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm font-mono focus:ring-2 focus:ring-accent outline-none">{% for s in config.get('shopping', {}).get('exclusions', {}).get('always_exclude', []) %}{{ s }}
+{% endfor %}</textarea>
+                        </div>
+
+                        <div class="pt-2 border-t border-border">
+                            <button type="submit" name="reset_ai_tuning" value="1"
+                                    class="w-full bg-subtle hover:bg-border text-primary py-2 rounded-lg font-medium transition">
+                                Reset AI tuning to defaults
+                            </button>
+                            <p class="text-xs text-muted mt-1">Resets only AI Tuning fields above</p>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <details class="text-sm">
+                <summary class="text-muted cursor-pointer">Advanced</summary>
+                <div class="mt-3 space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-muted mb-1">Chat model</label>
+                        <input type="text" name="chat_model" value="{{ config.llm.chat_model }}"
+                               class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-muted mb-1">Embedding model</label>
+                        <input type="text" name="embedding_model" value="{{ config.llm.embedding_model }}"
+                               class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    </div>
+                    <div class="pt-2 border-t border-border">
+                        <label class="flex items-center text-muted">
+                            <input type="checkbox" name="vision_validation" 
+                                   {% if not config.image_search or config.image_search.use_vision_validation != false %}checked{% endif %}
+                                   class="mr-2 accent-accent">
+                            <span class="text-sm">Verify images with AI vision</span>
+                        </label>
+                        <p class="text-xs text-muted mt-1 ml-5">Uses LLM to confirm images are food (slower but more accurate)</p>
+                    </div>
+                    <div class="pt-2 border-t border-border">
+                        <label class="block text-sm font-medium text-muted mb-2">Mealie data access</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center text-sm text-muted cursor-pointer">
+                                <input type="radio" name="data_mode" value="api" 
+                                       {% if not config.get('mealie', {}).get('use_direct_db') %}checked{% endif %}
+                                       class="mr-2 accent-accent">
+                                API mode
+                            </label>
+                            <label class="flex items-center text-sm text-muted cursor-pointer">
+                                <input type="radio" name="data_mode" value="db" 
+                                       {% if config.get('mealie', {}).get('use_direct_db') %}checked{% endif %}
+                                       class="mr-2 accent-accent">
+                                DB mode
+                            </label>
+                        </div>
+                        <p class="text-xs text-muted mt-1">DB mode is ~500x faster but requires Docker volume mount to mealie-data</p>
+                    </div>
+                </div>
+            </details>
+            <button type="submit" class="w-full bg-accent hover:bg-accent-hover text-white py-2 rounded-lg font-medium transition">
+                Save Settings
+            </button>
+        </form>
+        
+        <!-- API Credentials Section -->
+        <div class="mt-6 pt-4 border-t border-border">
+            <h3 class="font-medium text-primary mb-3">API Credentials</h3>
+            <form action="/credentials" method="POST" class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-1">
+                        Mealie Token
+                        {% if credentials and credentials.mealie_token.configured %}
+                        <span class="text-success ml-1">✓</span>
+                        {% else %}
+                        <span class="text-error ml-1">required</span>
+                        {% endif %}
+                    </label>
+                    <input type="password" name="mealie_token" 
+                           placeholder="{% if credentials and credentials.mealie_token.configured %}••••••••{% else %}Enter token{% endif %}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    <p class="text-xs text-muted mt-1">Leave blank to keep existing</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-1">
+                        OpenRouter API Key
+                        {% if credentials and credentials.openrouter_api_key.configured %}
+                        <span class="text-success ml-1">✓</span>
+                        {% else %}
+                        <span class="text-error ml-1">required</span>
+                        {% endif %}
+                    </label>
+                    <input type="password" name="openrouter_api_key"
+                           placeholder="{% if credentials and credentials.openrouter_api_key.configured %}••••••••{% else %}sk-or-...{% endif %}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    <p class="text-xs text-muted mt-1">Leave blank to keep existing</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-1">
+                        Brave Search API Key
+                        {% if credentials and credentials.brave_api_key.configured %}
+                        <span class="text-success ml-1">✓</span>
+                        {% else %}
+                        <span class="text-muted ml-1">optional</span>
+                        {% endif %}
+                    </label>
+                    <input type="password" name="brave_api_key"
+                           placeholder="{% if credentials and credentials.brave_api_key.configured %}••••••••{% else %}BSA...{% endif %}"
+                           class="w-full px-3 py-2 bg-subtle border border-border rounded-lg text-sm focus:ring-2 focus:ring-accent outline-none">
+                    <p class="text-xs text-muted mt-1">For recipe image search (optional)</p>
+                </div>
+                <button type="submit" class="w-full bg-subtle hover:bg-border text-primary py-2 rounded-lg font-medium transition">
+                    Update Credentials
+                </button>
+            </form>
+        </div>
+    </div>
+</details>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-overlay absolute inset-0" onclick="closeConfirmModal()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+        <div class="card rounded-xl shadow-xl max-w-md w-full p-6 relative pointer-events-auto" onclick="event.stopPropagation()">
+            <h3 class="font-display text-xl text-primary mb-3">Confirm Action</h3>
+            <p id="confirm-message" class="text-muted text-sm mb-6"></p>
+            <div class="flex gap-3 justify-end">
+                <button type="button" onclick="closeConfirmModal()" 
+                        class="px-4 py-2 text-muted hover:text-primary font-medium transition">
+                    Cancel
+                </button>
+                <button type="button" id="confirm-submit-btn"
+                        class="px-4 py-2 bg-error hover:bg-error/80 text-white rounded-lg font-medium transition">
+                    Continue
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Track the form that triggered the confirmation and whether it was confirmed
+let pendingForm = null;
+let formConfirmed = false;
+
+function showConfirmModal(message, form) {
+    pendingForm = form;
+    formConfirmed = false;
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirmModal() {
+    pendingForm = null;
+    formConfirmed = false;
+    document.getElementById('confirm-modal').classList.add('hidden');
+}
+
+function submitPendingForm() {
+    if (pendingForm) {
+        formConfirmed = true;
+        pendingForm.submit();
+    }
+    closeConfirmModal();
+}
+
+// Set up confirmation modal submit button
+document.getElementById('confirm-submit-btn').addEventListener('click', submitPendingForm);
+
+// Intercept form submissions that have data-confirm
+document.addEventListener('submit', function(e) {
+    const form = e.target;
+    const confirmMessage = form.getAttribute('data-confirm');
+    
+    // Only show modal if form has confirmation and hasn't been confirmed yet
+    if (confirmMessage && !formConfirmed) {
+        e.preventDefault();
+        showConfirmModal(confirmMessage, form);
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeConfirmModal();
+});
+
+function testConnection() {
+    const url = document.getElementById('mealie_url').value;
+    const status = document.getElementById('connection-status');
+    status.textContent = 'Testing...';
+    status.className = 'text-xs mt-1 text-muted';
+    
+    fetch('/test-connection', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'mealie_url=' + encodeURIComponent(url)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            status.textContent = '✓ ' + data.message;
+            status.className = 'text-xs mt-1 text-success';
+        } else {
+            status.textContent = '✗ ' + data.error;
+            status.className = 'text-xs mt-1 text-error';
+        }
+    });
+}
+
+function resetWorker() {
+    const btn = document.getElementById('reset-worker-btn');
+    const status = document.getElementById('reset-worker-status');
+    
+    if (!confirm('Force cancel all running jobs?')) return;
+    
+    btn.textContent = 'Resetting...';
+    btn.disabled = true;
+    status.classList.remove('hidden');
+    status.textContent = 'Cancelling jobs...';
+    status.className = 'text-xs py-2 text-muted';
+    
+    fetch('/reset-worker', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                status.textContent = '✓ ' + data.message;
+                status.className = 'text-xs py-2 text-success';
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                status.textContent = '✗ ' + (data.error || 'Failed');
+                status.className = 'text-xs py-2 text-error';
+                btn.textContent = 'Reset';
+                btn.disabled = false;
+            }
+        })
+        .catch(e => {
+            status.textContent = '✗ Error: ' + e.message;
+            status.className = 'text-xs py-2 text-error';
+            btn.textContent = 'Reset';
+            btn.disabled = false;
+        });
+}
+
+// Auto-open and scroll to section when URL has a hash fragment
+(function() {
+    function openHashTarget() {
+        var hash = window.location.hash;
+        if (hash) {
+            try {
+                var target = document.querySelector(hash);
+            } catch(e) {
+                return; // invalid selector
+            }
+            if (target && target.tagName === 'DETAILS') {
+                target.open = true;
+                // Wait one frame for the details content to render before scrolling
+                requestAnimationFrame(function() {
+                    target.scrollIntoView({behavior: 'smooth', block: 'start'});
+                });
+            }
+        }
+    }
+    // Run after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', openHashTarget);
+    } else {
+        // Script is at bottom of page, DOM is already ready
+        openHashTarget();
+    }
+    // Also handle in-page hash changes
+    window.addEventListener('hashchange', openHashTarget);
+})();
+</script>
+{% endblock %}
