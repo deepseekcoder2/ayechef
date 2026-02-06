@@ -4,6 +4,8 @@ AI-powered weekly meal planning with vector search, automatic shopping lists, an
 
 **Stack:** Flask + Huey (web panel) • OpenRouter (LLM) • sentence-transformers (local embeddings) • Mealie (recipe storage)
 
+![Aye Chef Dashboard](docs/screenshots/dashboard.png)
+
 ---
 
 ## What This Does
