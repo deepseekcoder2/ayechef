@@ -165,7 +165,7 @@ After importing recipes, build the vector search index:
 2. Click **Repair & Optimize** under "Routine"
 3. This tags untagged recipes, parses ingredients, and builds the search index
 
-The first run may take a few minutes if you imported many recipes. The embedding model downloads automatically if not already cached (~16GB, one-time).
+The first run may take a few hours if you imported many recipes. The embedding model downloads automatically if not already cached (~16GB, one-time).
 
 ### Step 9: Plan your first meal
 
