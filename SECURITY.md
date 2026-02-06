@@ -16,7 +16,3 @@ Please do **not** open a public issue for security vulnerabilities.
 - Remote code execution or command injection
 - Cross-site scripting (XSS) in the web panel
 - Any issue that could affect users on a shared network
-
-## Response
-
-We aim to acknowledge reports within 48 hours and provide a fix or mitigation plan within 7 days.
