@@ -775,20 +775,8 @@ class _MealieAPIAdapter:
         
         params = {'start_date': start_date, 'end_date': end_date}
         logger.debug(f"API get_meal_plans: requesting {params}")
-        data = self._get('/households/mealplans', params=params, timeout=60)
-        logger.debug(f"API get_meal_plans: raw response type={type(data).__name__}, preview={str(data)[:200] if data else 'None'}")
-        
-        # Response may be a list directly or wrapped in 'items'
-        # Handle None response (API returns null) and missing/null items
-        if data is None:
-            logger.warning("API get_meal_plans: received None response")
-            return []
-        if isinstance(data, list):
-            logger.debug(f"API get_meal_plans: returning list with {len(data)} items")
-            return data
-        items = data.get('items')
-        result = items if isinstance(items, list) else []
-        logger.debug(f"API get_meal_plans: extracted {len(result)} items from dict response")
+        result = self._get_paginated('/households/mealplans', page_size=100, params=params, timeout=60)
+        logger.debug(f"API get_meal_plans: fetched {len(result)} entries")
         return result
     
     def create_meal_plan_entry(self, data: Dict[str, Any]) -> Dict[str, Any]:
