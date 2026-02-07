@@ -663,6 +663,7 @@ Inside Docker, `localhost` refers to the container, not your host machine. Use o
 - **[recipe-scrapers](https://github.com/hhursev/recipe-scrapers)** - Recipe parsing library
 - **[mkayeterry/recipe-urls](https://github.com/mkayeterry/recipe-urls)** - URL discovery patterns
 - **[nlynch31/Mealie-script](https://github.com/nlynch31/Mealie-script)** - Ingredient parsing approach
+- **[D0rk4ce/mealie-recipe-dredger](https://github.com/D0rk4ce/mealie-recipe-dredger)** - Post recipe cleanup inspiration
 
 ---
 
