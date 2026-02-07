@@ -36,6 +36,8 @@ Aye Chef is a companion tool for [Mealie](https://mealie.io), an open-source rec
 
 If you don't have Mealie yet, set it up first: [Mealie Installation Guide](https://docs.mealie.io/documentation/getting-started/installation/)
 
+If you have an existing version, MAKE SURE TO BACK UP YOUR MEALIE LIBRARY. THIS IS EXPERIMENTAL SOFTWARE. YOU HAVE BEEN WARNED. 
+
 ### 2. Hardware requirements
 
 Aye Chef runs a local embedding model (`nvidia/llama-embed-nemotron-8b`, 8B parameters) for semantic recipe search. This model loads in bfloat16 and requires significant memory:
